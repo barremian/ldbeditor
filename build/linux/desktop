@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=LevelDB Editor
+Comment=A ldbeditor application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/ldbeditor %u
+Terminal=false
+Type=Application
+Icon=ldbeditor
+Categories=Utility;
+StartupWMClass=ldbeditor
+
+ 

@@ -1,0 +1,374 @@
+
+// this file is generated — do not edit it
+
+
+/// <reference types="@sveltejs/kit" />
+
+/**
+ * This module provides access to environment variables that are injected _statically_ into your bundle at build time and are limited to _private_ access.
+ * 
+ * |         | Runtime                                                                    | Build time                                                               |
+ * | ------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+ * | Private | [`$env/dynamic/private`](https://svelte.dev/docs/kit/$env-dynamic-private) | [`$env/static/private`](https://svelte.dev/docs/kit/$env-static-private) |
+ * | Public  | [`$env/dynamic/public`](https://svelte.dev/docs/kit/$env-dynamic-public)   | [`$env/static/public`](https://svelte.dev/docs/kit/$env-static-public)   |
+ * 
+ * Static environment variables are [loaded by Vite](https://vitejs.dev/guide/env-and-mode.html#env-files) from `.env` files and `process.env` at build time and then statically injected into your bundle at build time, enabling optimisations like dead code elimination.
+ * 
+ * **_Private_ access:**
+ * 
+ * - This module cannot be imported into client-side code
+ * - This module only includes variables that _do not_ begin with [`config.kit.env.publicPrefix`](https://svelte.dev/docs/kit/configuration#env) _and do_ start with [`config.kit.env.privatePrefix`](https://svelte.dev/docs/kit/configuration#env) (if configured)
+ * 
+ * For example, given the following build time environment:
+ * 
+ * ```env
+ * ENVIRONMENT=production
+ * PUBLIC_BASE_URL=http://site.com
+ * ```
+ * 
+ * With the default `publicPrefix` and `privatePrefix`:
+ * 
+ * ```ts
+ * import { ENVIRONMENT, PUBLIC_BASE_URL } from '$env/static/private';
+ * 
+ * console.log(ENVIRONMENT); // => "production"
+ * console.log(PUBLIC_BASE_URL); // => throws error during build
+ * ```
+ * 
+ * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
+ */
+declare module '$env/static/private' {
+	export const NVM_INC: string;
+	export const TMUXIFIER_SESSION_ROOT: string;
+	export const TERM_PROGRAM: string;
+	export const NODE: string;
+	export const INIT_CWD: string;
+	export const _P9K_TTY: string;
+	export const PYENV_ROOT: string;
+	export const NVM_CD_FLAGS: string;
+	export const ANDROID_HOME: string;
+	export const TERM: string;
+	export const SHELL: string;
+	export const TMPDIR: string;
+	export const HOMEBREW_REPOSITORY: string;
+	export const npm_config_global_prefix: string;
+	export const TERM_PROGRAM_VERSION: string;
+	export const COLOR: string;
+	export const TERM_SESSION_ID: string;
+	export const npm_config_noproxy: string;
+	export const npm_config_local_prefix: string;
+	export const ZSH: string;
+	export const TMUX_CONF: string;
+	export const LC_ALL: string;
+	export const USER: string;
+	export const NVM_DIR: string;
+	export const LS_COLORS: string;
+	export const COMMAND_MODE: string;
+	export const npm_config_globalconfig: string;
+	export const HOMEBREW_NO_ANALYTICS: string;
+	export const SSH_AUTH_SOCK: string;
+	export const NEXT_TELEMETRY_DISABLED: string;
+	export const __CF_USER_TEXT_ENCODING: string;
+	export const TMUX_PROGRAM: string;
+	export const npm_execpath: string;
+	export const TERM_FEATURES: string;
+	export const PYENV_VIRTUALENV_INIT: string;
+	export const PAGER: string;
+	export const TMUX: string;
+	export const LSCOLORS: string;
+	export const TMUXIFIER_LAYOUT_PATH: string;
+	export const GOOGLE_API_KEY: string;
+	export const TERMINFO_DIRS: string;
+	export const PATH: string;
+	export const npm_package_json: string;
+	export const _: string;
+	export const TMUX_CONF_LOCAL: string;
+	export const npm_config_userconfig: string;
+	export const npm_config_init_module: string;
+	export const __CFBundleIdentifier: string;
+	export const npm_command: string;
+	export const PWD: string;
+	export const JAVA_HOME: string;
+	export const npm_lifecycle_event: string;
+	export const P9K_SSH: string;
+	export const EDITOR: string;
+	export const npm_package_name: string;
+	export const P9K_TTY: string;
+	export const LANG: string;
+	export const ITERM_PROFILE: string;
+	export const npm_config_npm_version: string;
+	export const XPC_FLAGS: string;
+	export const TMUX_PANE: string;
+	export const PRODUCTION: string;
+	export const npm_config_node_gyp: string;
+	export const RBENV_SHELL: string;
+	export const npm_package_version: string;
+	export const XPC_SERVICE_NAME: string;
+	export const GPG_TTY: string;
+	export const GEMINI_API_KEY: string;
+	export const SHLVL: string;
+	export const PYENV_SHELL: string;
+	export const HOME: string;
+	export const COLORFGBG: string;
+	export const npm_config_loglevel: string;
+	export const LC_TERMINAL_VERSION: string;
+	export const HOMEBREW_PREFIX: string;
+	export const ITERM_SESSION_ID: string;
+	export const npm_config_cache: string;
+	export const LOGNAME: string;
+	export const LESS: string;
+	export const npm_lifecycle_script: string;
+	export const VISUAL: string;
+	export const TMUX_SOCKET: string;
+	export const TMUX_XPANES_PANE_BORDER_STATUS: string;
+	export const NVM_BIN: string;
+	export const npm_config_user_agent: string;
+	export const TMUXIFIER_MIN_TMUX_VERSION: string;
+	export const INFOPATH: string;
+	export const HOMEBREW_CELLAR: string;
+	export const _P9K_SSH_TTY: string;
+	export const LC_TERMINAL: string;
+	export const TMUXIFIER: string;
+	export const npm_node_execpath: string;
+	export const npm_config_prefix: string;
+	export const COLORTERM: string;
+	export const NODE_ENV: string;
+}
+
+/**
+ * This module provides access to environment variables that are injected _statically_ into your bundle at build time and are _publicly_ accessible.
+ * 
+ * |         | Runtime                                                                    | Build time                                                               |
+ * | ------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+ * | Private | [`$env/dynamic/private`](https://svelte.dev/docs/kit/$env-dynamic-private) | [`$env/static/private`](https://svelte.dev/docs/kit/$env-static-private) |
+ * | Public  | [`$env/dynamic/public`](https://svelte.dev/docs/kit/$env-dynamic-public)   | [`$env/static/public`](https://svelte.dev/docs/kit/$env-static-public)   |
+ * 
+ * Static environment variables are [loaded by Vite](https://vitejs.dev/guide/env-and-mode.html#env-files) from `.env` files and `process.env` at build time and then statically injected into your bundle at build time, enabling optimisations like dead code elimination.
+ * 
+ * **_Public_ access:**
+ * 
+ * - This module _can_ be imported into client-side code
+ * - **Only** variables that begin with [`config.kit.env.publicPrefix`](https://svelte.dev/docs/kit/configuration#env) (which defaults to `PUBLIC_`) are included
+ * 
+ * For example, given the following build time environment:
+ * 
+ * ```env
+ * ENVIRONMENT=production
+ * PUBLIC_BASE_URL=http://site.com
+ * ```
+ * 
+ * With the default `publicPrefix` and `privatePrefix`:
+ * 
+ * ```ts
+ * import { ENVIRONMENT, PUBLIC_BASE_URL } from '$env/static/public';
+ * 
+ * console.log(ENVIRONMENT); // => throws error during build
+ * console.log(PUBLIC_BASE_URL); // => "http://site.com"
+ * ```
+ * 
+ * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
+ */
+declare module '$env/static/public' {
+	
+}
+
+/**
+ * This module provides access to environment variables set _dynamically_ at runtime and that are limited to _private_ access.
+ * 
+ * |         | Runtime                                                                    | Build time                                                               |
+ * | ------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+ * | Private | [`$env/dynamic/private`](https://svelte.dev/docs/kit/$env-dynamic-private) | [`$env/static/private`](https://svelte.dev/docs/kit/$env-static-private) |
+ * | Public  | [`$env/dynamic/public`](https://svelte.dev/docs/kit/$env-dynamic-public)   | [`$env/static/public`](https://svelte.dev/docs/kit/$env-static-public)   |
+ * 
+ * Dynamic environment variables are defined by the platform you're running on. For example if you're using [`adapter-node`](https://github.com/sveltejs/kit/tree/main/packages/adapter-node) (or running [`vite preview`](https://svelte.dev/docs/kit/cli)), this is equivalent to `process.env`.
+ * 
+ * **_Private_ access:**
+ * 
+ * - This module cannot be imported into client-side code
+ * - This module includes variables that _do not_ begin with [`config.kit.env.publicPrefix`](https://svelte.dev/docs/kit/configuration#env) _and do_ start with [`config.kit.env.privatePrefix`](https://svelte.dev/docs/kit/configuration#env) (if configured)
+ * 
+ * > [!NOTE] In `dev`, `$env/dynamic` includes environment variables from `.env`. In `prod`, this behavior will depend on your adapter.
+ * 
+ * > [!NOTE] To get correct types, environment variables referenced in your code should be declared (for example in an `.env` file), even if they don't have a value until the app is deployed:
+ * >
+ * > ```env
+ * > MY_FEATURE_FLAG=
+ * > ```
+ * >
+ * > You can override `.env` values from the command line like so:
+ * >
+ * > ```sh
+ * > MY_FEATURE_FLAG="enabled" npm run dev
+ * > ```
+ * 
+ * For example, given the following runtime environment:
+ * 
+ * ```env
+ * ENVIRONMENT=production
+ * PUBLIC_BASE_URL=http://site.com
+ * ```
+ * 
+ * With the default `publicPrefix` and `privatePrefix`:
+ * 
+ * ```ts
+ * import { env } from '$env/dynamic/private';
+ * 
+ * console.log(env.ENVIRONMENT); // => "production"
+ * console.log(env.PUBLIC_BASE_URL); // => undefined
+ * ```
+ */
+declare module '$env/dynamic/private' {
+	export const env: {
+		NVM_INC: string;
+		TMUXIFIER_SESSION_ROOT: string;
+		TERM_PROGRAM: string;
+		NODE: string;
+		INIT_CWD: string;
+		_P9K_TTY: string;
+		PYENV_ROOT: string;
+		NVM_CD_FLAGS: string;
+		ANDROID_HOME: string;
+		TERM: string;
+		SHELL: string;
+		TMPDIR: string;
+		HOMEBREW_REPOSITORY: string;
+		npm_config_global_prefix: string;
+		TERM_PROGRAM_VERSION: string;
+		COLOR: string;
+		TERM_SESSION_ID: string;
+		npm_config_noproxy: string;
+		npm_config_local_prefix: string;
+		ZSH: string;
+		TMUX_CONF: string;
+		LC_ALL: string;
+		USER: string;
+		NVM_DIR: string;
+		LS_COLORS: string;
+		COMMAND_MODE: string;
+		npm_config_globalconfig: string;
+		HOMEBREW_NO_ANALYTICS: string;
+		SSH_AUTH_SOCK: string;
+		NEXT_TELEMETRY_DISABLED: string;
+		__CF_USER_TEXT_ENCODING: string;
+		TMUX_PROGRAM: string;
+		npm_execpath: string;
+		TERM_FEATURES: string;
+		PYENV_VIRTUALENV_INIT: string;
+		PAGER: string;
+		TMUX: string;
+		LSCOLORS: string;
+		TMUXIFIER_LAYOUT_PATH: string;
+		GOOGLE_API_KEY: string;
+		TERMINFO_DIRS: string;
+		PATH: string;
+		npm_package_json: string;
+		_: string;
+		TMUX_CONF_LOCAL: string;
+		npm_config_userconfig: string;
+		npm_config_init_module: string;
+		__CFBundleIdentifier: string;
+		npm_command: string;
+		PWD: string;
+		JAVA_HOME: string;
+		npm_lifecycle_event: string;
+		P9K_SSH: string;
+		EDITOR: string;
+		npm_package_name: string;
+		P9K_TTY: string;
+		LANG: string;
+		ITERM_PROFILE: string;
+		npm_config_npm_version: string;
+		XPC_FLAGS: string;
+		TMUX_PANE: string;
+		PRODUCTION: string;
+		npm_config_node_gyp: string;
+		RBENV_SHELL: string;
+		npm_package_version: string;
+		XPC_SERVICE_NAME: string;
+		GPG_TTY: string;
+		GEMINI_API_KEY: string;
+		SHLVL: string;
+		PYENV_SHELL: string;
+		HOME: string;
+		COLORFGBG: string;
+		npm_config_loglevel: string;
+		LC_TERMINAL_VERSION: string;
+		HOMEBREW_PREFIX: string;
+		ITERM_SESSION_ID: string;
+		npm_config_cache: string;
+		LOGNAME: string;
+		LESS: string;
+		npm_lifecycle_script: string;
+		VISUAL: string;
+		TMUX_SOCKET: string;
+		TMUX_XPANES_PANE_BORDER_STATUS: string;
+		NVM_BIN: string;
+		npm_config_user_agent: string;
+		TMUXIFIER_MIN_TMUX_VERSION: string;
+		INFOPATH: string;
+		HOMEBREW_CELLAR: string;
+		_P9K_SSH_TTY: string;
+		LC_TERMINAL: string;
+		TMUXIFIER: string;
+		npm_node_execpath: string;
+		npm_config_prefix: string;
+		COLORTERM: string;
+		NODE_ENV: string;
+		[key: `PUBLIC_${string}`]: undefined;
+		[key: `${string}`]: string | undefined;
+	}
+}
+
+/**
+ * This module provides access to environment variables set _dynamically_ at runtime and that are _publicly_ accessible.
+ * 
+ * |         | Runtime                                                                    | Build time                                                               |
+ * | ------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+ * | Private | [`$env/dynamic/private`](https://svelte.dev/docs/kit/$env-dynamic-private) | [`$env/static/private`](https://svelte.dev/docs/kit/$env-static-private) |
+ * | Public  | [`$env/dynamic/public`](https://svelte.dev/docs/kit/$env-dynamic-public)   | [`$env/static/public`](https://svelte.dev/docs/kit/$env-static-public)   |
+ * 
+ * Dynamic environment variables are defined by the platform you're running on. For example if you're using [`adapter-node`](https://github.com/sveltejs/kit/tree/main/packages/adapter-node) (or running [`vite preview`](https://svelte.dev/docs/kit/cli)), this is equivalent to `process.env`.
+ * 
+ * **_Public_ access:**
+ * 
+ * - This module _can_ be imported into client-side code
+ * - **Only** variables that begin with [`config.kit.env.publicPrefix`](https://svelte.dev/docs/kit/configuration#env) (which defaults to `PUBLIC_`) are included
+ * 
+ * > [!NOTE] In `dev`, `$env/dynamic` includes environment variables from `.env`. In `prod`, this behavior will depend on your adapter.
+ * 
+ * > [!NOTE] To get correct types, environment variables referenced in your code should be declared (for example in an `.env` file), even if they don't have a value until the app is deployed:
+ * >
+ * > ```env
+ * > MY_FEATURE_FLAG=
+ * > ```
+ * >
+ * > You can override `.env` values from the command line like so:
+ * >
+ * > ```sh
+ * > MY_FEATURE_FLAG="enabled" npm run dev
+ * > ```
+ * 
+ * For example, given the following runtime environment:
+ * 
+ * ```env
+ * ENVIRONMENT=production
+ * PUBLIC_BASE_URL=http://example.com
+ * ```
+ * 
+ * With the default `publicPrefix` and `privatePrefix`:
+ * 
+ * ```ts
+ * import { env } from '$env/dynamic/public';
+ * console.log(env.ENVIRONMENT); // => undefined, not public
+ * console.log(env.PUBLIC_BASE_URL); // => "http://example.com"
+ * ```
+ * 
+ * ```
+ * 
+ * ```
+ */
+declare module '$env/dynamic/public' {
+	export const env: {
+		[key: `PUBLIC_${string}`]: string | undefined;
+	}
+}

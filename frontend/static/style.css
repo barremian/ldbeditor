@@ -58,13 +58,23 @@ button {
     line-height: 20px;
 }
 
-body {
+html, body {
     margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    height: 100%;
+}
+
+body {
     display: flex;
     place-items: center;
     place-content: center;
-    min-width: 320px;
-    min-height: 100vh;
+}
+
+/* LevelDB editor full-height layout */
+body:has(.editor-layout) {
+    place-items: stretch;
+    place-content: stretch;
 }
 
 .container {

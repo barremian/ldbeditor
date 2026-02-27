@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
   import { Dialogs, Window } from "@wailsio/runtime";
   import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
   import { Badge } from "$lib/components/ui/badge";
@@ -22,6 +23,11 @@
 
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
+  const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
+  const DEFAULT_KEY_PANE_WIDTH = 320;
+  const MIN_KEY_PANE_WIDTH = 240;
+  const MIN_VALUE_PANE_WIDTH = 320;
+  const GRID_GAP_PX = 16;
 
   // Startup view state
   let recentPaths: { path: string; label: string }[] = [];
@@ -34,6 +40,110 @@
   let selectedKey: string | null = null;
   let selectedValue = "";
   let valueLoading = false;
+  let isDesktopLayout = false;
+  let keyPaneWidth = DEFAULT_KEY_PANE_WIDTH;
+  let hasLoadedPaneWidth = false;
+  let isResizingPane = false;
+  let editorSplitContainer: HTMLDivElement | null = null;
+  let detachPointerListeners: (() => void) | null = null;
+
+  function getContainerWidth() {
+    return editorSplitContainer?.clientWidth ?? window.innerWidth;
+  }
+
+  function clampKeyPaneWidth(
+    width: number,
+    containerWidth: number = getContainerWidth(),
+  ) {
+    const maxKeyWidth = Math.max(
+      MIN_KEY_PANE_WIDTH,
+      containerWidth - MIN_VALUE_PANE_WIDTH - GRID_GAP_PX,
+    );
+
+    return Math.min(Math.max(width, MIN_KEY_PANE_WIDTH), maxKeyWidth);
+  }
+
+  function loadPaneWidthPreference() {
+    try {
+      const rawWidth = localStorage.getItem(KEY_PANE_WIDTH_STORAGE_KEY);
+      if (!rawWidth) {
+        keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
+        return;
+      }
+
+      const parsedWidth = Number(rawWidth);
+      if (!Number.isFinite(parsedWidth)) {
+        keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
+        return;
+      }
+
+      keyPaneWidth = clampKeyPaneWidth(parsedWidth);
+    } catch {
+      keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
+    }
+  }
+
+  function savePaneWidthPreference() {
+    try {
+      localStorage.setItem(
+        KEY_PANE_WIDTH_STORAGE_KEY,
+        String(Math.round(keyPaneWidth)),
+      );
+    } catch {
+      // ignore localStorage failures
+    }
+  }
+
+  function syncKeyPaneWidthToViewport() {
+    if (!isDesktopLayout) return;
+    keyPaneWidth = clampKeyPaneWidth(keyPaneWidth);
+  }
+
+  function stopPaneResize() {
+    if (detachPointerListeners) {
+      detachPointerListeners();
+      detachPointerListeners = null;
+    }
+    isResizingPane = false;
+    document.body.style.cursor = "";
+    savePaneWidthPreference();
+  }
+
+  function startPaneResize(event: PointerEvent) {
+    if (!isDesktopLayout || !editorSplitContainer) return;
+
+    const handle = event.currentTarget as HTMLElement | null;
+    if (!handle) return;
+
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    isResizingPane = true;
+    document.body.style.cursor = "col-resize";
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (!editorSplitContainer) return;
+      const containerRect = editorSplitContainer.getBoundingClientRect();
+      const nextWidth = moveEvent.clientX - containerRect.left - GRID_GAP_PX / 2;
+      keyPaneWidth = clampKeyPaneWidth(nextWidth, containerRect.width);
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      if (handle.hasPointerCapture(upEvent.pointerId)) {
+        handle.releasePointerCapture(upEvent.pointerId);
+      }
+      stopPaneResize();
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+
+    detachPointerListeners = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+  }
 
   // Load recent paths from localStorage
   function loadRecentPaths() {
@@ -165,6 +275,41 @@
     }
   }
 
+  onMount(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const updateLayoutMode = () => {
+      isDesktopLayout = mediaQuery.matches;
+      if (!isDesktopLayout) return;
+
+      if (!hasLoadedPaneWidth) {
+        loadPaneWidthPreference();
+        hasLoadedPaneWidth = true;
+        return;
+      }
+
+      syncKeyPaneWidthToViewport();
+    };
+
+    updateLayoutMode();
+
+    const onWindowResize = () => {
+      syncKeyPaneWidthToViewport();
+    };
+
+    mediaQuery.addEventListener("change", updateLayoutMode);
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateLayoutMode);
+      window.removeEventListener("resize", onWindowResize);
+      stopPaneResize();
+    };
+  });
+
+  onDestroy(() => {
+    stopPaneResize();
+  });
+
   // Init
   loadRecentPaths();
 </script>
@@ -195,9 +340,36 @@
     </header>
 
     <div
-      class="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-[320px_minmax(0,1fr)]"
+      bind:this={editorSplitContainer}
+      class="relative grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-1"
+      style={
+        isDesktopLayout
+          ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
+          : undefined
+      }
     >
-      <Card class="flex min-h-0 flex-col">
+      {#if isDesktopLayout}
+        <button
+          type="button"
+          class={`absolute bottom-4 top-4 z-10 w-3 -translate-x-1/2 cursor-col-resize rounded-full transition-colors ${
+            isResizingPane ? "bg-primary/20" : "hover:bg-muted"
+          }`}
+          style={`left: ${keyPaneWidth + GRID_GAP_PX / 2}px;`}
+          aria-label="Resize key and value panes"
+          on:pointerdown={startPaneResize}
+        >
+          <span
+            class={`mx-auto block h-full w-px ${
+              isResizingPane ? "bg-primary/70" : "bg-border/70"
+            }`}
+          ></span>
+        </button>
+      {/if}
+
+      <Card
+        class="flex min-h-0 min-w-0 flex-col"
+        style={isDesktopLayout ? `min-width: ${MIN_KEY_PANE_WIDTH}px;` : undefined}
+      >
         <CardHeader class="pb-3">
           <CardTitle class="flex items-center gap-2 text-base">
             <KeyRound class="h-4 w-4" />
@@ -235,7 +407,12 @@
         </CardContent>
       </Card>
 
-      <Card class="flex min-h-0 flex-col">
+      <Card
+        class="flex min-h-0 min-w-0 flex-col"
+        style={
+          isDesktopLayout ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;` : undefined
+        }
+      >
         <CardHeader class="pb-3">
           <CardTitle class="flex items-center gap-2 text-base">
             <FileText class="h-4 w-4" />

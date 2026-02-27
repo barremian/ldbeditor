@@ -251,7 +251,7 @@
             {/if}
           </CardDescription>
         </CardHeader>
-        <CardContent class="min-h-0 flex-1">
+        <CardContent class="min-h-0 flex-1 px-3 pb-3">
           {#if valueLoading}
             <div class="px-1 py-3 text-sm text-muted-foreground">
               Loading value…
@@ -265,7 +265,7 @@
               class="h-full rounded-md border border-border/70 bg-muted/20"
             >
               <pre
-                class="p-4 font-mono text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap break-all select-text">
+                class="p-2 font-mono text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap break-all select-text">
 {selectedValue}</pre>
             </ScrollArea>
           {/if}

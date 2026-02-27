@@ -8,13 +8,13 @@ This document helps AI agents understand and work effectively in the **ldbeditor
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Wails v3 (alpha) |
-| Backend | Go 1.25 |
-| Frontend | SvelteKit, Svelte 4, Vite 5 |
-| Build | Task (go-task) |
-| Styling | Puppertino CSS (optional, in `frontend/public/puppertino`) |
+| Layer     | Technology                                                 |
+| --------- | ---------------------------------------------------------- |
+| Framework | Wails v3 (alpha)                                           |
+| Backend   | Go 1.25                                                    |
+| Frontend  | SvelteKit, Svelte 4, Vite 5                                |
+| Build     | Task (go-task)                                             |
+| Styling   | Puppertino CSS (optional, in `frontend/public/puppertino`) |
 
 ## Project Structure
 
@@ -52,16 +52,16 @@ ldbeditor/
 
 ## Commands
 
-| Task | Command | Description |
-|------|---------|-------------|
-| Dev mode | `task dev` | Hot-reload dev; uses `wails3 dev` + Vite + run |
-| Build | `task build` | Build app for current OS |
-| Package | `task package` | Create packaged `.app` (macOS) |
-| Run | `task run` | Run built binary |
-| Server mode | `task build:server` / `task run:server` | Build/run HTTP-only, no GUI |
-| Docker server | `task build:docker` / `task run:docker` | Docker image for server mode |
-| Cross-compile | `task setup:docker` then `task build` | Use Docker to build for other platforms |
-| macOS universal | `task darwin:build:universal` | ARM64 + AMD64 universal binary |
+| Task            | Command                                 | Description                                    |
+| --------------- | --------------------------------------- | ---------------------------------------------- |
+| Dev mode        | `task dev`                              | Hot-reload dev; uses `wails3 dev` + Vite + run |
+| Build           | `task build`                            | Build app for current OS                       |
+| Package         | `task package`                          | Create packaged `.app` (macOS)                 |
+| Run             | `task run`                              | Run built binary                               |
+| Server mode     | `task build:server` / `task run:server` | Build/run HTTP-only, no GUI                    |
+| Docker server   | `task build:docker` / `task run:docker` | Docker image for server mode                   |
+| Cross-compile   | `task setup:docker` then `task build`   | Use Docker to build for other platforms        |
+| macOS universal | `task darwin:build:universal`           | ARM64 + AMD64 universal binary                 |
 
 ## Conventions for AI Agents
 
@@ -97,7 +97,9 @@ The app registers a `time` event (string) in `main.go` and emits it every second
 
 ```ts
 import { Events } from "@wailsio/runtime";
-Events.On('time', (data) => { /* data.data is the string */ });
+Events.On("time", (data) => {
+  /* data.data is the string */
+});
 ```
 
 To add events: `application.RegisterEvent<YourType>("eventName")` and `app.Event.Emit("eventName", value)`.

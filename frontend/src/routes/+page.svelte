@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialogs } from "@wailsio/runtime";
-	import { LevelDBService, OpenDatabaseResult } from "../../bindings/changeme";
+	import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
 
 	const RECENT_STORAGE_KEY = "recent-leveldb-paths";
 	const MAX_RECENT = 10;

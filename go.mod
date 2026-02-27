@@ -1,4 +1,4 @@
-module changeme
+module ldbeditor
 
 go 1.25
 

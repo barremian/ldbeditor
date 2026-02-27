@@ -34,6 +34,8 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+    --titlebar-height: 0px;
+    --trafficlights-safe-left: 1rem;
   }
 
   .dark {
@@ -100,6 +102,16 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
+  }
+
+  body.platform-darwin {
+    --titlebar-height: 50px;
+    --trafficlights-safe-left: 88px;
+  }
+
+  .titlebar-drag-region {
+    height: var(--titlebar-height);
+    --wails-draggable: drag;
   }
 }
 

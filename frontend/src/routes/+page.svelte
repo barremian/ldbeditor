@@ -160,6 +160,9 @@
 
 {#if dbPath}
   <div class="editor-layout flex h-screen flex-col">
+    <div
+      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-sm"
+    ></div>
     <header
       class="flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
     >

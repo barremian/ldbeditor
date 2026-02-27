@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Dialogs } from "@wailsio/runtime";
+  import { Dialogs, Window } from "@wailsio/runtime";
   import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
@@ -154,6 +154,17 @@
     selectedValue = "";
   }
 
+  async function handleTitlebarDoubleClick() {
+    const platformHint = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+    if (!platformHint.includes("mac")) return;
+
+    try {
+      await Window.Zoom();
+    } catch {
+      await Window.ToggleMaximise();
+    }
+  }
+
   // Init
   loadRecentPaths();
 </script>
@@ -162,6 +173,8 @@
   <div class="editor-layout flex h-screen flex-col">
     <div
       class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-sm"
+      role="none"
+      on:dblclick={handleTitlebarDoubleClick}
     ></div>
     <header
       class="flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"

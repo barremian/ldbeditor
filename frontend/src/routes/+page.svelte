@@ -1,6 +1,24 @@
 <script lang="ts">
   import { Dialogs } from "@wailsio/runtime";
   import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
+  import { Badge } from "$lib/components/ui/badge";
+  import { Button } from "$lib/components/ui/button";
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+  } from "$lib/components/ui/card";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import {
+    Database,
+    FileText,
+    FolderOpen,
+    History,
+    KeyRound,
+    X,
+  } from "lucide-svelte";
 
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
@@ -141,295 +159,156 @@
 </script>
 
 {#if dbPath}
-  <!-- Editor View -->
-  <div class="editor-layout">
-    <header class="editor-header">
-      <button class="btn-back" on:click={closeDatabase}>← Close database</button
+  <div class="editor-layout flex h-screen flex-col">
+    <header
+      class="flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        class="gap-2"
+        on:click={closeDatabase}
       >
-      <span class="db-path" title={dbPath}
-        >{dbPath.split(/[/\\]/).pop() || dbPath}</span
-      >
+        <X class="h-4 w-4" />
+        Close database
+      </Button>
+      <Badge variant="secondary" class="max-w-[60vw] truncate" title={dbPath}>
+        <Database class="mr-1.5 h-3.5 w-3.5" />
+        {dbPath.split(/[/\\]/).pop() || dbPath}
+      </Badge>
     </header>
 
-    <div class="editor-main">
-      <aside class="keys-panel">
-        <h3>Keys</h3>
-        {#if loading}
-          <div class="loading">Loading keys…</div>
-        {:else if keys.length === 0}
-          <div class="empty-state">No keys</div>
-        {:else}
-          <ul class="key-list">
-            {#each keys as key}
-              <li>
-                <button
-                  class="key-item"
-                  class:selected={selectedKey === key}
-                  on:click={() => selectKey(key)}
-                >
-                  {key.length > 80 ? key.slice(0, 80) + "…" : key}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </aside>
+    <div
+      class="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-[320px_minmax(0,1fr)]"
+    >
+      <Card class="flex min-h-0 flex-col">
+        <CardHeader class="pb-3">
+          <CardTitle class="flex items-center gap-2 text-base">
+            <KeyRound class="h-4 w-4" />
+            Keys
+          </CardTitle>
+          <CardDescription>{keys.length} entries</CardDescription>
+        </CardHeader>
+        <CardContent class="min-h-0 flex-1 px-3 pb-3">
+          {#if loading}
+            <div class="px-2 py-3 text-sm text-muted-foreground">
+              Loading keys…
+            </div>
+          {:else if keys.length === 0}
+            <div class="px-2 py-3 text-sm text-muted-foreground">No keys</div>
+          {:else}
+            <ScrollArea class="h-full rounded-md border border-border/70">
+              <ul class="space-y-1 p-2">
+                {#each keys as key}
+                  <li>
+                    <button
+                      class={`w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                        selectedKey === key
+                          ? "bg-primary/15 text-primary"
+                          : "hover:bg-muted"
+                      }`}
+                      on:click={() => selectKey(key)}
+                    >
+                      {key.length > 80 ? key.slice(0, 80) + "…" : key}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            </ScrollArea>
+          {/if}
+        </CardContent>
+      </Card>
 
-      <section class="value-panel">
-        <h3>
-          Value {#if selectedKey}<span class="key-hint"
-              >({selectedKey.length > 40
-                ? selectedKey.slice(0, 40) + "…"
-                : selectedKey})</span
-            >{/if}
-        </h3>
-        {#if valueLoading}
-          <div class="loading">Loading value…</div>
-        {:else if selectedKey === null}
-          <div class="empty-state">Select a key</div>
-        {:else}
-          <pre class="value-content">{selectedValue}</pre>
-        {/if}
-      </section>
+      <Card class="flex min-h-0 flex-col">
+        <CardHeader class="pb-3">
+          <CardTitle class="flex items-center gap-2 text-base">
+            <FileText class="h-4 w-4" />
+            Value
+          </CardTitle>
+          <CardDescription>
+            {#if selectedKey}
+              {selectedKey.length > 60
+                ? selectedKey.slice(0, 60) + "…"
+                : selectedKey}
+            {:else}
+              Select a key to inspect its value
+            {/if}
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="min-h-0 flex-1">
+          {#if valueLoading}
+            <div class="px-1 py-3 text-sm text-muted-foreground">
+              Loading value…
+            </div>
+          {:else if selectedKey === null}
+            <div class="px-1 py-3 text-sm text-muted-foreground">
+              Select a key
+            </div>
+          {:else}
+            <ScrollArea
+              class="h-full rounded-md border border-border/70 bg-muted/20"
+            >
+              <pre
+                class="p-4 font-mono text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap break-all select-text">
+{selectedValue}</pre>
+            </ScrollArea>
+          {/if}
+        </CardContent>
+      </Card>
     </div>
   </div>
 {:else}
-  <!-- Startup View -->
-  <div class="startup-container">
-    <h1>LevelDB Editor</h1>
-    <button
-      class="btn-open"
-      on:click={openDatabaseFromDialog}
-      disabled={loading}
-    >
-      {loading ? "Opening…" : "Open LevelDB database"}
-    </button>
+  <div class="flex min-h-screen items-center justify-center p-6">
+    <Card class="w-full max-w-2xl">
+      <CardHeader class="space-y-4">
+        <div class="flex items-center justify-between">
+          <CardTitle class="flex items-center gap-2 text-2xl">
+            <Database class="h-6 w-6 text-primary" />
+            LevelDB Editor
+          </CardTitle>
+          <Badge variant="outline">Desktop</Badge>
+        </div>
+        <CardDescription>
+          Open a LevelDB folder to browse keys and inspect values instantly.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-6">
+        <Button
+          class="gap-2"
+          on:click={openDatabaseFromDialog}
+          disabled={loading}
+        >
+          <FolderOpen class="h-4 w-4" />
+          {loading ? "Opening…" : "Open LevelDB database"}
+        </Button>
 
-    {#if recentPaths.length > 0}
-      <section class="recent-section">
-        <h2>Recently opened</h2>
-        <ul class="recent-list">
-          {#each recentPaths as item}
-            <li>
-              <button
-                class="recent-item"
-                on:click={() => openDatabaseFromPath(item.path)}
-                disabled={loading}
-              >
-                {item.label}
-              </button>
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/if}
+        {#if errorMessage}
+          <p class="text-sm text-destructive">{errorMessage}</p>
+        {/if}
+
+        {#if recentPaths.length > 0}
+          <section class="space-y-3">
+            <h2
+              class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+            >
+              <History class="h-4 w-4" />
+              Recently opened
+            </h2>
+            <div class="space-y-2">
+              {#each recentPaths as item}
+                <Button
+                  variant="ghost"
+                  class="w-full justify-start font-normal"
+                  on:click={() => openDatabaseFromPath(item.path)}
+                  disabled={loading}
+                >
+                  {item.label}
+                </Button>
+              {/each}
+            </div>
+          </section>
+        {/if}
+      </CardContent>
+    </Card>
   </div>
 {/if}
-
-<style>
-  .startup-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    padding: 2rem;
-  }
-
-  .startup-container h1 {
-    margin-bottom: 2rem;
-    font-size: 2rem;
-  }
-
-  .btn-open {
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    border-radius: 6px;
-    border: none;
-    background: #646cff;
-    color: white;
-    cursor: pointer;
-    margin-bottom: 2rem;
-  }
-
-  .btn-open:hover:not(:disabled) {
-    background: #535bf2;
-  }
-
-  .btn-open:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .recent-section {
-    width: 100%;
-    max-width: 400px;
-  }
-
-  .recent-section h2 {
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 0.75rem;
-    font-weight: 500;
-  }
-
-  .recent-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .recent-item {
-    display: block;
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.25rem;
-    text-align: left;
-    background: rgba(255, 255, 255, 0.08);
-    border: none;
-    border-radius: 4px;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-
-  .recent-item:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  .recent-item:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .editor-layout {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-
-  .editor-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .btn-back {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.9rem;
-    border-radius: 4px;
-    border: none;
-    background: rgba(255, 255, 255, 0.15);
-    color: inherit;
-    cursor: pointer;
-  }
-
-  .btn-back:hover {
-    background: rgba(255, 255, 255, 0.25);
-  }
-
-  .db-path {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.8);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .editor-main {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .keys-panel,
-  .value-panel {
-    display: flex;
-    flex-direction: column;
-    padding: 1rem;
-    overflow: hidden;
-  }
-
-  .keys-panel {
-    width: 300px;
-    min-width: 200px;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .value-panel {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .keys-panel h3,
-  .value-panel h3 {
-    margin: 0 0 0.75rem 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .key-hint {
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.85em;
-  }
-
-  .key-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .key-item {
-    display: block;
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.25rem;
-    text-align: left;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.85rem;
-    word-break: break-all;
-  }
-
-  .key-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .key-item.selected {
-    background: rgba(100, 108, 255, 0.4);
-  }
-
-  .value-content {
-    flex: 1;
-    margin: 0;
-    padding: 1rem;
-    overflow: auto;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 4px;
-    font-family:
-      ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-all;
-    user-select: text;
-    -webkit-user-select: text;
-  }
-
-  .loading,
-  .empty-state {
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.9rem;
-    padding: 1rem;
-  }
-</style>

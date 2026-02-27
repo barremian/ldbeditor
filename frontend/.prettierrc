@@ -2,7 +2,7 @@
   "semi": true,
   "singleQuote": false,
   "tabWidth": 2,
-  "useTabs": true,
+  "useTabs": false,
   "trailingComma": "es5",
   "plugins": ["prettier-plugin-svelte"],
   "overrides": [

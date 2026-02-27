@@ -1,0 +1,8 @@
+{
+  "setup-worktree": [
+    "cd frontend",
+    "npm install",
+    "cd ..",
+    "task dev"
+  ]
+}

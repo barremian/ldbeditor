@@ -105,7 +105,7 @@
   }
 
   body.platform-darwin {
-    --titlebar-height: 50px;
+    --titlebar-height: 40px;
     --trafficlights-safe-left: 88px;
   }
 

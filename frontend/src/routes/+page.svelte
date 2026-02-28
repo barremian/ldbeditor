@@ -14,6 +14,7 @@
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import {
     Check,
+    ChevronDown,
     Database,
     FileText,
     FolderOpen,
@@ -21,6 +22,7 @@
     KeyRound,
     Pencil,
     Plus,
+    RefreshCcw,
     Save,
     Trash2,
     X,
@@ -36,6 +38,17 @@
   const GRID_GAP_PX = 16;
   const SPLIT_CONTAINER_PADDING_PX = 16;
   const SPLIT_CONTAINER_HORIZONTAL_INSET_PX = SPLIT_CONTAINER_PADDING_PX * 2;
+  const AUTO_REFRESH_OPTIONS = [
+    { label: "Off", intervalMs: 0 },
+    { label: "5s", intervalMs: 5000 },
+    { label: "15s", intervalMs: 15000 },
+    { label: "30s", intervalMs: 30000 },
+    { label: "60s", intervalMs: 60000 },
+  ] as const;
+  const REFRESH_RING_RADIUS = 6;
+  const REFRESH_RING_CIRCUMFERENCE = 2 * Math.PI * REFRESH_RING_RADIUS;
+  const REFRESH_COUNTDOWN_TICK_MS = 200;
+  const MIN_REFRESH_FEEDBACK_MS = 150;
 
   // Startup view state
   let recentPaths: { path: string; label: string }[] = [];
@@ -76,6 +89,15 @@
   let debouncedKeySearch = "";
   let keySearchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
   let renameInputElement: HTMLInputElement | null = null;
+  let isRefreshing = false;
+  let autoRefreshIntervalMs = 0;
+  let nextRefreshAt: number | null = null;
+  let countdownNow = Date.now();
+  let isRefreshMenuOpen = false;
+  let refreshMenuContainer: HTMLDivElement | null = null;
+  let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
+  let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
+  let refreshRequestId = 0;
 
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
@@ -98,6 +120,15 @@
     ? keys.filter((key) => key.toLowerCase().includes(debouncedKeySearch))
     : keys;
   $: scheduleDebouncedKeySearch(keySearchInput);
+  $: autoRefreshLabel = getAutoRefreshLabel(autoRefreshIntervalMs);
+  $: remainingAutoRefreshMs =
+    autoRefreshIntervalMs > 0 && nextRefreshAt
+      ? Math.max(0, nextRefreshAt - countdownNow)
+      : 0;
+  $: autoRefreshProgress =
+    autoRefreshIntervalMs > 0
+      ? Math.max(0, Math.min(1, remainingAutoRefreshMs / autoRefreshIntervalMs))
+      : 1;
 
   function scheduleDebouncedKeySearch(value: string) {
     if (keySearchDebounceTimeout) {
@@ -122,6 +153,83 @@
     originalValue = "";
     editorValue = "";
     isValueEditing = false;
+  }
+
+  function getAutoRefreshLabel(intervalMs: number) {
+    return (
+      AUTO_REFRESH_OPTIONS.find((option) => option.intervalMs === intervalMs)
+        ?.label ?? "Custom"
+    );
+  }
+
+  function clearAutoRefreshTimer() {
+    if (!autoRefreshTimeout) return;
+    clearTimeout(autoRefreshTimeout);
+    autoRefreshTimeout = null;
+  }
+
+  function clearRefreshCountdownTicker() {
+    if (!refreshCountdownInterval) return;
+    clearInterval(refreshCountdownInterval);
+    refreshCountdownInterval = null;
+  }
+
+  function startRefreshCountdownTicker() {
+    clearRefreshCountdownTicker();
+    if (!dbPath || autoRefreshIntervalMs <= 0) return;
+    countdownNow = Date.now();
+    refreshCountdownInterval = setInterval(() => {
+      countdownNow = Date.now();
+    }, REFRESH_COUNTDOWN_TICK_MS);
+  }
+
+  function scheduleNextAutoRefresh() {
+    clearAutoRefreshTimer();
+    if (!dbPath || autoRefreshIntervalMs <= 0) {
+      nextRefreshAt = null;
+      return;
+    }
+
+    const scheduledAt = Date.now();
+    nextRefreshAt = scheduledAt + autoRefreshIntervalMs;
+    countdownNow = scheduledAt;
+    autoRefreshTimeout = setTimeout(() => {
+      void runAutoRefreshTick();
+    }, autoRefreshIntervalMs);
+  }
+
+  function stopAutoRefresh() {
+    autoRefreshIntervalMs = 0;
+    nextRefreshAt = null;
+    isRefreshMenuOpen = false;
+    clearAutoRefreshTimer();
+    clearRefreshCountdownTicker();
+  }
+
+  function setAutoRefreshInterval(intervalMs: number) {
+    autoRefreshIntervalMs = intervalMs;
+    isRefreshMenuOpen = false;
+    if (intervalMs <= 0 || !dbPath) {
+      nextRefreshAt = null;
+      clearAutoRefreshTimer();
+      clearRefreshCountdownTicker();
+      return;
+    }
+    startRefreshCountdownTicker();
+    scheduleNextAutoRefresh();
+  }
+
+  function getRefreshButtonTitle() {
+    if (autoRefreshIntervalMs <= 0) return "Refresh now";
+    const seconds = Math.ceil(remainingAutoRefreshMs / 1000);
+    return `Refresh now (auto ${autoRefreshLabel}, ${seconds}s remaining)`;
+  }
+
+  async function waitForMinimumRefreshFeedback(startedAtMs: number) {
+    const elapsedMs = Date.now() - startedAtMs;
+    const remainingMs = MIN_REFRESH_FEEDBACK_MS - elapsedMs;
+    if (remainingMs <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, remainingMs));
   }
 
   async function confirmDiscardUnsavedChanges() {
@@ -327,17 +435,88 @@
     }
   }
 
-  async function loadKeys() {
+  async function reloadDatabase({
+    preserveSelection = false,
+  }: {
+    preserveSelection?: boolean;
+  } = {}) {
+    const requestId = ++refreshRequestId;
+    const selectedBeforeReload = preserveSelection ? selectedKey : null;
     loading = true;
     try {
       const keyList = await LevelDBService.GetKeys();
+      if (requestId !== refreshRequestId) return false;
       keys = keyList ?? [];
-      clearSelection();
+
+      if (!selectedBeforeReload) {
+        clearSelection();
+        return true;
+      }
+
+      if (!keys.includes(selectedBeforeReload)) {
+        clearSelection();
+        return true;
+      }
+
+      await fetchValueForSelectedKey(selectedBeforeReload);
+      if (requestId !== refreshRequestId) return false;
+      return true;
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      errorMessage = message;
+      throw new Error(message);
     } finally {
       loading = false;
     }
+  }
+
+  async function loadKeys() {
+    await reloadDatabase();
+  }
+
+  async function refreshDatabase(source: "manual" | "auto") {
+    if (!dbPath || isRefreshing || loading) {
+      if (source === "auto" && dbPath && autoRefreshIntervalMs > 0) {
+        scheduleNextAutoRefresh();
+      }
+      return;
+    }
+
+    if (isDirty && !(await confirmDiscardUnsavedChanges())) {
+      if (source === "auto" && autoRefreshIntervalMs > 0) {
+        scheduleNextAutoRefresh();
+      }
+      return;
+    }
+
+    isRefreshMenuOpen = false;
+    isRefreshing = true;
+    const refreshStartedAtMs = Date.now();
+    try {
+      await reloadDatabase({ preserveSelection: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await Dialogs.Error({
+        Title: source === "auto" ? "Auto-refresh failed" : "Refresh failed",
+        Message:
+          `Could not refresh the open database. ${message}`.trim(),
+      });
+    } finally {
+      await waitForMinimumRefreshFeedback(refreshStartedAtMs);
+      isRefreshing = false;
+      if (autoRefreshIntervalMs > 0) {
+        scheduleNextAutoRefresh();
+      }
+    }
+  }
+
+  async function runAutoRefreshTick() {
+    if (!dbPath || autoRefreshIntervalMs <= 0) return;
+    await refreshDatabase("auto");
+  }
+
+  function triggerManualRefresh() {
+    void refreshDatabase("manual");
   }
 
   async function fetchValueForSelectedKey(key: string) {
@@ -528,6 +707,7 @@
     } catch {
       // ignore
     }
+    stopAutoRefresh();
     dbPath = "";
     keys = [];
     filteredKeys = [];
@@ -580,6 +760,11 @@
     window.addEventListener("resize", onWindowResize);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isRefreshMenuOpen) {
+        isRefreshMenuOpen = false;
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         if (
           selectedKey &&
@@ -614,18 +799,30 @@
       }
     };
 
+    const onPointerDown = (event: PointerEvent) => {
+      if (!isRefreshMenuOpen || !refreshMenuContainer) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!refreshMenuContainer.contains(target)) {
+        isRefreshMenuOpen = false;
+      }
+    };
+
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
 
     return () => {
       mediaQuery.removeEventListener("change", updateLayoutMode);
       window.removeEventListener("resize", onWindowResize);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
       stopPaneResize();
     };
   });
 
   onDestroy(() => {
     stopPaneResize();
+    stopAutoRefresh();
     if (keySearchDebounceTimeout) {
       clearTimeout(keySearchDebounceTimeout);
     }
@@ -643,7 +840,7 @@
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
     <header
-      class="flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
+      class="relative z-40 flex items-center justify-between gap-3 overflow-visible border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
     >
       <Button
         variant="outline"
@@ -654,10 +851,103 @@
         <X class="h-4 w-4" />
         Close database
       </Button>
-      <Badge variant="secondary" class="max-w-[60vw] truncate" title={dbPath}>
-        <Database class="mr-1.5 h-3.5 w-3.5" />
-        {dbPath.split(/[/\\]/).pop() || dbPath}
-      </Badge>
+      <div class="flex items-center gap-2">
+        <Badge variant="secondary" class="max-w-[50vw] truncate" title={dbPath}>
+          <Database class="mr-1.5 h-3.5 w-3.5" />
+          {dbPath.split(/[/\\]/).pop() || dbPath}
+        </Badge>
+        {#if isRefreshing}
+          <Badge variant="outline">Refreshing…</Badge>
+        {/if}
+
+        <div bind:this={refreshMenuContainer} class="relative flex items-stretch">
+          <Button
+            variant="outline"
+            size="sm"
+            class="gap-1.5 rounded-r-none border-r-0 pr-2"
+            title={getRefreshButtonTitle()}
+            disabled={isRefreshing}
+            on:click={triggerManualRefresh}
+          >
+            {#if isRefreshing}
+              <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
+            {:else if autoRefreshIntervalMs > 0}
+              <svg
+                class="h-3.5 w-3.5 -rotate-90"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="8"
+                  cy="8"
+                  r={REFRESH_RING_RADIUS}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="opacity-20"
+                />
+                <circle
+                  cx="8"
+                  cy="8"
+                  r={REFRESH_RING_RADIUS}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-dasharray={`${REFRESH_RING_CIRCUMFERENCE} ${REFRESH_RING_CIRCUMFERENCE}`}
+                  stroke-dashoffset={`${REFRESH_RING_CIRCUMFERENCE * (1 - autoRefreshProgress)}`}
+                />
+              </svg>
+            {:else}
+              <RefreshCcw class="h-3.5 w-3.5" />
+            {/if}
+            {isRefreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="w-8 rounded-l-none px-0"
+            aria-label="Auto-refresh options"
+            aria-haspopup="menu"
+            aria-expanded={isRefreshMenuOpen}
+            disabled={isRefreshing}
+            on:click={() => {
+              if (isRefreshing) return;
+              isRefreshMenuOpen = !isRefreshMenuOpen;
+            }}
+          >
+            <ChevronDown class="h-3.5 w-3.5" />
+          </Button>
+
+          {#if isRefreshMenuOpen}
+            <div
+              class={`absolute right-0 top-10 z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md ${
+                isRefreshing ? "pointer-events-none opacity-70" : ""
+              }`}
+              role="menu"
+              aria-label="Auto-refresh interval options"
+            >
+              {#each AUTO_REFRESH_OPTIONS as option}
+                <button
+                  type="button"
+                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
+                    option.intervalMs === autoRefreshIntervalMs ? "bg-muted/80" : ""
+                  }`}
+                  role="menuitemradio"
+                  aria-checked={option.intervalMs === autoRefreshIntervalMs}
+                  disabled={isRefreshing}
+                  on:click={() => setAutoRefreshInterval(option.intervalMs)}
+                >
+                  <span>{option.label}</span>
+                  {#if option.intervalMs === autoRefreshIntervalMs}
+                    <Check class="h-3.5 w-3.5" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
     </header>
 
     <div
@@ -788,9 +1078,9 @@
             </div>
           {/if}
 
-          {#if loading}
+          {#if loading || isRefreshing}
             <div class="px-2 py-3 text-sm text-muted-foreground">
-              Loading keys…
+              {isRefreshing ? "Refreshing keys…" : "Loading keys…"}
             </div>
           {:else if keys.length === 0}
             <div class="px-2 py-3 text-sm text-muted-foreground">
@@ -969,9 +1259,9 @@
           </CardDescription>
         </CardHeader>
         <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
-          {#if valueLoading}
+          {#if valueLoading || isRefreshing}
             <div class="px-1 py-3 text-sm text-muted-foreground">
-              Loading value…
+              {isRefreshing ? "Refreshing value…" : "Loading value…"}
             </div>
           {:else if selectedKey === null}
             <div class="px-1 py-3 text-sm text-muted-foreground">

@@ -856,9 +856,6 @@
           <Database class="mr-1.5 h-3.5 w-3.5" />
           {dbPath.split(/[/\\]/).pop() || dbPath}
         </Badge>
-        {#if isRefreshing}
-          <Badge variant="outline">Refreshing…</Badge>
-        {/if}
 
         <div bind:this={refreshMenuContainer} class="relative flex items-stretch">
           <Button

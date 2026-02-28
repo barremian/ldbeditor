@@ -13,11 +13,16 @@
   } from "$lib/components/ui/card";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import {
+    Check,
     Database,
     FileText,
     FolderOpen,
     History,
     KeyRound,
+    Pencil,
+    Plus,
+    Save,
+    Trash2,
     X,
   } from "lucide-svelte";
 
@@ -40,7 +45,19 @@
   let dbPath = "";
   let keys: string[] = [];
   let selectedKey: string | null = null;
-  let selectedValue = "";
+  let originalValue = "";
+  let editorValue = "";
+  let isSaving = false;
+  let isDeleting = false;
+  let showCreateForm = false;
+  let isCreating = false;
+  let isRenaming = false;
+  let newKeyInput = "";
+  let newValueInput = "";
+  let editingKey: string | null = null;
+  let renameInput = "";
+  let keyPendingDelete: string | null = null;
+  let isValueEditing = false;
   let valueLoading = false;
   let isDesktopLayout = false;
   let keyPaneWidth = DEFAULT_KEY_PANE_WIDTH;
@@ -48,6 +65,54 @@
   let isResizingPane = false;
   let editorSplitContainer: HTMLDivElement | null = null;
   let detachPointerListeners: (() => void) | null = null;
+  let isDirty = false;
+  let valueValidationError = "";
+  let createKeyValidationError = "";
+  let createValueValidationError = "";
+  let renameValidationError = "";
+
+  function getHexValidationError(display: string, label: string): string {
+    if (!display.startsWith("0x")) return "";
+    const raw = display.slice(2);
+    if (raw.length % 2 !== 0) {
+      return `${label} hex input must have an even number of characters.`;
+    }
+    if (!/^[0-9a-fA-F]*$/.test(raw)) {
+      return `${label} hex input may only contain 0-9 and a-f.`;
+    }
+    return "";
+  }
+
+  $: isDirty = selectedKey !== null && editorValue !== originalValue;
+  $: valueValidationError = getHexValidationError(editorValue, "Value");
+  $: createKeyValidationError = getHexValidationError(newKeyInput, "New key");
+  $: createValueValidationError = getHexValidationError(newValueInput, "New value");
+  $: renameValidationError = getHexValidationError(renameInput, "New key");
+
+  function clearSelection() {
+    selectedKey = null;
+    originalValue = "";
+    editorValue = "";
+    isValueEditing = false;
+  }
+
+  async function confirmDiscardUnsavedChanges() {
+    if (!isDirty) return true;
+    return window.confirm(
+      "You have unsaved value edits. Discard these changes?",
+    );
+  }
+
+  function resetCreateForm() {
+    newKeyInput = "";
+    newValueInput = "";
+    showCreateForm = false;
+  }
+
+  function resetRenameForm() {
+    renameInput = "";
+    editingKey = null;
+  }
 
   function getContainerWidth() {
     return editorSplitContainer?.clientWidth ?? window.innerWidth;
@@ -239,8 +304,7 @@
     try {
       const keyList = await LevelDBService.GetKeys();
       keys = keyList ?? [];
-      selectedKey = null;
-      selectedValue = "";
+      clearSelection();
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
     } finally {
@@ -248,22 +312,183 @@
     }
   }
 
-  async function selectKey(key: string) {
+  async function fetchValueForSelectedKey(key: string) {
     selectedKey = key;
+    isValueEditing = false;
     valueLoading = true;
-    selectedValue = "";
+    originalValue = "";
+    editorValue = "";
 
     try {
       const value = await LevelDBService.GetValue(key);
-      selectedValue = value ?? "";
+      originalValue = value ?? "";
+      editorValue = originalValue;
     } catch (err) {
-      selectedValue = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      const message = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      originalValue = message;
+      editorValue = message;
     } finally {
       valueLoading = false;
     }
   }
 
+  async function selectKey(key: string) {
+    if (selectedKey === key) return;
+    if (!(await confirmDiscardUnsavedChanges())) return;
+    resetRenameForm();
+    await fetchValueForSelectedKey(key);
+  }
+
+  function startValueEdit() {
+    if (!selectedKey || valueLoading || isSaving) return;
+    isValueEditing = true;
+  }
+
+  async function saveValue() {
+    if (
+      !selectedKey ||
+      !isValueEditing ||
+      isSaving ||
+      !isDirty ||
+      valueValidationError
+    ) {
+      return;
+    }
+
+    isSaving = true;
+    try {
+      await LevelDBService.PutValue(selectedKey, editorValue);
+      originalValue = editorValue;
+      isValueEditing = false;
+    } catch (err) {
+      await Dialogs.Error({
+        Title: "Save failed",
+        Message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  function revertValueChanges() {
+    editorValue = originalValue;
+    isValueEditing = false;
+  }
+
+  function startRename(key: string) {
+    if (isRenaming) return;
+    editingKey = key;
+    renameInput = key;
+  }
+
+  async function createKey() {
+    if (isCreating || createKeyValidationError || createValueValidationError) {
+      return;
+    }
+    if (!newKeyInput) {
+      await Dialogs.Error({
+        Title: "Invalid key",
+        Message: "Key cannot be empty.",
+      });
+      return;
+    }
+    if (keys.includes(newKeyInput)) {
+      await Dialogs.Error({
+        Title: "Key already exists",
+        Message: "Choose a different key name.",
+      });
+      return;
+    }
+    if (!(await confirmDiscardUnsavedChanges())) return;
+
+    isCreating = true;
+    try {
+      await LevelDBService.PutValue(newKeyInput, newValueInput);
+      const createdKey = newKeyInput;
+      await loadKeys();
+      resetCreateForm();
+      await fetchValueForSelectedKey(createdKey);
+    } catch (err) {
+      await Dialogs.Error({
+        Title: "Create key failed",
+        Message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      isCreating = false;
+    }
+  }
+
+  async function renameEditingKey() {
+    if (!editingKey || isRenaming || renameValidationError) return;
+    if (!renameInput) {
+      await Dialogs.Error({
+        Title: "Invalid key",
+        Message: "New key cannot be empty.",
+      });
+      return;
+    }
+    if (renameInput === editingKey) {
+      resetRenameForm();
+      return;
+    }
+    if (keys.includes(renameInput)) {
+      await Dialogs.Error({
+        Title: "Key already exists",
+        Message: "Choose a different key name.",
+      });
+      return;
+    }
+    if (isDirty && !(await confirmDiscardUnsavedChanges())) return;
+
+    isRenaming = true;
+    try {
+      await LevelDBService.RenameKey(editingKey, renameInput);
+      const renamedKey = renameInput;
+      await loadKeys();
+      resetRenameForm();
+      await fetchValueForSelectedKey(renamedKey);
+    } catch (err) {
+      await Dialogs.Error({
+        Title: "Rename key failed",
+        Message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      isRenaming = false;
+    }
+  }
+
+  function requestDeleteKey(key: string) {
+    if (isDeleting) return;
+    keyPendingDelete = key;
+  }
+
+  async function confirmDeleteKey() {
+    if (!keyPendingDelete || isDeleting) return;
+    const targetKey = keyPendingDelete;
+    if (isDirty && selectedKey === targetKey && !(await confirmDiscardUnsavedChanges())) {
+      return;
+    }
+
+    isDeleting = true;
+    try {
+      await LevelDBService.DeleteKey(targetKey);
+      await loadKeys();
+      if (editingKey === targetKey) {
+        resetRenameForm();
+      }
+      keyPendingDelete = null;
+    } catch (err) {
+      await Dialogs.Error({
+        Title: "Delete key failed",
+        Message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      isDeleting = false;
+    }
+  }
+
   async function closeDatabase() {
+    if (!(await confirmDiscardUnsavedChanges())) return;
     try {
       await LevelDBService.CloseDatabase();
     } catch {
@@ -271,8 +496,11 @@
     }
     dbPath = "";
     keys = [];
-    selectedKey = null;
-    selectedValue = "";
+    clearSelection();
+    resetCreateForm();
+    resetRenameForm();
+    keyPendingDelete = null;
+    isValueEditing = false;
   }
 
   async function handleTitlebarDoubleClick() {
@@ -310,9 +538,47 @@
     mediaQuery.addEventListener("change", updateLayoutMode);
     window.addEventListener("resize", onWindowResize);
 
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        if (
+          selectedKey &&
+          isValueEditing &&
+          isDirty &&
+          !isSaving &&
+          !valueValidationError
+        ) {
+          event.preventDefault();
+          void saveValue();
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (editingKey) {
+          resetRenameForm();
+          return;
+        }
+        if (keyPendingDelete && !isDeleting) {
+          keyPendingDelete = null;
+          return;
+        }
+        if (isValueEditing) {
+          revertValueChanges();
+          return;
+        }
+        if (showCreateForm) {
+          resetCreateForm();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
     return () => {
       mediaQuery.removeEventListener("change", updateLayoutMode);
       window.removeEventListener("resize", onWindowResize);
+      window.removeEventListener("keydown", onKeyDown);
       stopPaneResize();
     };
   });
@@ -381,35 +647,183 @@
         class="flex min-h-0 min-w-0 flex-col"
         style={isDesktopLayout ? `min-width: ${MIN_KEY_PANE_WIDTH}px;` : undefined}
       >
-        <CardHeader class="pb-3">
-          <CardTitle class="flex items-center gap-2 text-base">
-            <KeyRound class="h-4 w-4" />
-            Keys
-          </CardTitle>
+        <CardHeader class="space-y-3 pb-3">
+          <div class="flex items-center justify-between gap-2">
+            <CardTitle class="flex items-center gap-2 text-base">
+              <KeyRound class="h-4 w-4" />
+              Keys
+            </CardTitle>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                class="gap-1.5"
+                on:click={() => {
+                  showCreateForm = !showCreateForm;
+                  if (!showCreateForm) {
+                    newKeyInput = "";
+                    newValueInput = "";
+                  }
+                }}
+              >
+                <Plus class="h-3.5 w-3.5" />
+                New
+              </Button>
+            </div>
+          </div>
           <CardDescription>{keys.length} entries</CardDescription>
         </CardHeader>
-        <CardContent class="min-h-0 flex-1 px-3 pb-3">
+        <CardContent class="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
+          {#if showCreateForm}
+            <div class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2">
+              <input
+                class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                placeholder="New key (text or 0x...)"
+                bind:value={newKeyInput}
+                disabled={isCreating}
+              />
+              {#if createKeyValidationError}
+                <p class="text-xs text-destructive">{createKeyValidationError}</p>
+              {/if}
+              <textarea
+                class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                placeholder="Initial value (text or 0x...)"
+                bind:value={newValueInput}
+                disabled={isCreating}
+              ></textarea>
+              {#if createValueValidationError}
+                <p class="text-xs text-destructive">{createValueValidationError}</p>
+              {/if}
+              <div class="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  class="gap-1.5"
+                  disabled={
+                    isCreating ||
+                    !!createKeyValidationError ||
+                    !!createValueValidationError
+                  }
+                  on:click={createKey}
+                >
+                  <Save class="h-3.5 w-3.5" />
+                  {isCreating ? "Creating…" : "Create key"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  on:click={resetCreateForm}
+                  disabled={isCreating}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          {/if}
+
           {#if loading}
             <div class="px-2 py-3 text-sm text-muted-foreground">
               Loading keys…
             </div>
           {:else if keys.length === 0}
-            <div class="px-2 py-3 text-sm text-muted-foreground">No keys</div>
+            <div class="px-2 py-3 text-sm text-muted-foreground">
+              No keys yet. Use <strong>New</strong> to create your first key.
+            </div>
           {:else}
-            <ScrollArea class="h-full rounded-md border border-border/70">
+            <ScrollArea class="h-full min-h-0 rounded-md border border-border/70">
               <ul class="space-y-1 p-2">
                 {#each keys as key}
-                  <li>
-                    <button
-                      class={`w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                  <li class="group">
+                    <div
+                      class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
                         selectedKey === key
                           ? "bg-primary/15 text-primary"
                           : "hover:bg-muted"
                       }`}
-                      on:click={() => selectKey(key)}
                     >
-                      {key.length > 80 ? key.slice(0, 80) + "…" : key}
-                    </button>
+                      {#if editingKey === key}
+                        <div class="min-w-0 flex-1">
+                          <input
+                            class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                            bind:value={renameInput}
+                            disabled={isRenaming}
+                            on:click|stopPropagation
+                            on:keydown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void renameEditingKey();
+                              }
+                            }}
+                          />
+                          {#if renameValidationError}
+                            <p class="mt-1 text-xs text-destructive">
+                              {renameValidationError}
+                            </p>
+                          {/if}
+                        </div>
+                        <div class="ml-1 flex shrink-0 items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            disabled={
+                              isRenaming || !renameInput || !!renameValidationError
+                            }
+                            on:click={(event) => {
+                              event.stopPropagation();
+                              void renameEditingKey();
+                            }}
+                          >
+                            <Check class="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            disabled={isRenaming}
+                            on:click={(event) => {
+                              event.stopPropagation();
+                              resetRenameForm();
+                            }}
+                          >
+                            <X class="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      {:else}
+                        <button
+                          class="min-w-0 flex-1 truncate text-left"
+                          on:click={() => selectKey(key)}
+                        >
+                          {key.length > 80 ? key.slice(0, 80) + "…" : key}
+                        </button>
+                        <div
+                          class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            on:click={(event) => {
+                              event.stopPropagation();
+                              startRename(key);
+                            }}
+                          >
+                            <Pencil class="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7 text-destructive hover:text-destructive"
+                            disabled={isDeleting}
+                            on:click={(event) => {
+                              event.stopPropagation();
+                              requestDeleteKey(key);
+                            }}
+                          >
+                            <Trash2 class="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      {/if}
+                    </div>
                   </li>
                 {/each}
               </ul>
@@ -424,11 +838,51 @@
           isDesktopLayout ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;` : undefined
         }
       >
-        <CardHeader class="pb-3">
-          <CardTitle class="flex items-center gap-2 text-base">
-            <FileText class="h-4 w-4" />
-            Value
-          </CardTitle>
+        <CardHeader class="space-y-3 pb-3">
+          <div class="flex items-center justify-between gap-2">
+            <CardTitle class="flex items-center gap-2 text-base">
+              <FileText class="h-4 w-4" />
+              Value
+            </CardTitle>
+            <div class="flex items-center gap-2">
+              {#if isDirty}
+                <Badge variant="secondary">Unsaved</Badge>
+              {/if}
+              {#if isValueEditing}
+                <Button
+                  size="sm"
+                  class="gap-1.5"
+                  disabled={
+                    !selectedKey || !isDirty || !!valueValidationError || isSaving
+                  }
+                  on:click={saveValue}
+                >
+                  <Save class="h-3.5 w-3.5" />
+                  {isSaving ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="gap-1.5"
+                  disabled={isSaving}
+                  on:click={revertValueChanges}
+                >
+                  <X class="h-3.5 w-3.5" />
+                  Cancel
+                </Button>
+              {:else}
+                <Button
+                  size="sm"
+                  class="gap-1.5"
+                  disabled={!selectedKey || valueLoading || isSaving}
+                  on:click={startValueEdit}
+                >
+                  <Pencil class="h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              {/if}
+            </div>
+          </div>
           <CardDescription>
             {#if selectedKey}
               {selectedKey.length > 60
@@ -439,7 +893,7 @@
             {/if}
           </CardDescription>
         </CardHeader>
-        <CardContent class="min-h-0 flex-1 px-3 pb-3">
+        <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
           {#if valueLoading}
             <div class="px-1 py-3 text-sm text-muted-foreground">
               Loading value…
@@ -449,13 +903,19 @@
               Select a key
             </div>
           {:else}
-            <ScrollArea
-              class="h-full rounded-md border border-border/70 bg-muted/20"
-            >
-              <pre
-                class="p-2 font-mono text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap break-all select-text">
-{selectedValue}</pre>
-            </ScrollArea>
+            <textarea
+              class={`h-full min-h-0 flex-1 rounded-md border border-border/70 p-2 font-mono text-xs leading-relaxed ${
+                isValueEditing
+                  ? "bg-background text-foreground"
+                  : "bg-muted/20 text-foreground/90"
+              }`}
+              bind:value={editorValue}
+              readonly={!isValueEditing || isSaving}
+              spellcheck="false"
+            ></textarea>
+            {#if valueValidationError}
+              <p class="px-1 text-xs text-destructive">{valueValidationError}</p>
+            {/if}
           {/if}
         </CardContent>
       </Card>
@@ -512,6 +972,57 @@
             </div>
           </section>
         {/if}
+      </CardContent>
+    </Card>
+  </div>
+{/if}
+
+{#if keyPendingDelete}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
+    role="presentation"
+    on:click={() => {
+      if (!isDeleting) {
+        keyPendingDelete = null;
+      }
+    }}
+  >
+    <Card
+      class="w-full max-w-md border-destructive/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-key-title"
+      aria-describedby="delete-key-description"
+      on:click={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <CardHeader class="space-y-2">
+        <CardTitle id="delete-key-title">Delete key?</CardTitle>
+        <CardDescription id="delete-key-description">
+          Delete "{keyPendingDelete}"? This action cannot be undone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isDeleting}
+          on:click={() => {
+            keyPendingDelete = null;
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={isDeleting}
+          on:click={confirmDeleteKey}
+        >
+          <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+          {isDeleting ? "Deleting…" : "Delete"}
+        </Button>
       </CardContent>
     </Card>
   </div>

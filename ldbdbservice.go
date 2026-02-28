@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"sync"
 	"unicode/utf8"
 
@@ -92,6 +94,96 @@ func (s *LevelDBService) GetValue(keyDisplay string) (string, error) {
 	}
 
 	return bytesToDisplayString(value), nil
+}
+
+// PutValue creates or updates the value for a key.
+// Key and value use the same display format as GetKeys/GetValue (UTF-8 or "0x" prefixed hex).
+func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error {
+	s.mu.RLock()
+	db := s.db
+	s.mu.RUnlock()
+
+	if db == nil {
+		return errors.New("database is not open")
+	}
+
+	key, err := displayStringToBytes(keyDisplay)
+	if err != nil {
+		return fmt.Errorf("invalid key: %w", err)
+	}
+
+	value, err := displayStringToBytes(valueDisplay)
+	if err != nil {
+		return fmt.Errorf("invalid value: %w", err)
+	}
+
+	return db.Put(key, value, nil)
+}
+
+// DeleteKey deletes the given key.
+// keyDisplay uses the same format as returned by GetKeys.
+func (s *LevelDBService) DeleteKey(keyDisplay string) error {
+	s.mu.RLock()
+	db := s.db
+	s.mu.RUnlock()
+
+	if db == nil {
+		return errors.New("database is not open")
+	}
+
+	key, err := displayStringToBytes(keyDisplay)
+	if err != nil {
+		return fmt.Errorf("invalid key: %w", err)
+	}
+
+	return db.Delete(key, nil)
+}
+
+// RenameKey renames a key while preserving its value.
+// oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
+func (s *LevelDBService) RenameKey(oldKeyDisplay string, newKeyDisplay string) error {
+	s.mu.RLock()
+	db := s.db
+	s.mu.RUnlock()
+
+	if db == nil {
+		return errors.New("database is not open")
+	}
+
+	oldKey, err := displayStringToBytes(oldKeyDisplay)
+	if err != nil {
+		return fmt.Errorf("invalid old key: %w", err)
+	}
+
+	newKey, err := displayStringToBytes(newKeyDisplay)
+	if err != nil {
+		return fmt.Errorf("invalid new key: %w", err)
+	}
+
+	if string(oldKey) == string(newKey) {
+		return nil
+	}
+
+	value, err := db.Get(oldKey, nil)
+	if err != nil {
+		if errors.Is(err, leveldb.ErrNotFound) {
+			return errors.New("source key does not exist")
+		}
+		return err
+	}
+
+	targetExists, err := db.Has(newKey, nil)
+	if err != nil {
+		return err
+	}
+	if targetExists {
+		return errors.New("target key already exists")
+	}
+
+	batch := new(leveldb.Batch)
+	batch.Put(newKey, value)
+	batch.Delete(oldKey)
+	return db.Write(batch, nil)
 }
 
 // CloseDatabase closes the currently open database.

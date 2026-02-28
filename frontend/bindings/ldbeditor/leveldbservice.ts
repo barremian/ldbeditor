@@ -22,6 +22,14 @@ export function CloseDatabase(): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteKey deletes the given key.
+ * keyDisplay uses the same format as returned by GetKeys.
+ */
+export function DeleteKey(keyDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(277474761, keyDisplay);
+}
+
+/**
  * GetKeys returns all keys in the currently open database.
  * Keys are returned in lexicographic order.
  * Non-UTF-8 keys are hex-encoded.
@@ -49,6 +57,22 @@ export function OpenDatabase(path: string): $CancellablePromise<$models.OpenData
     return $Call.ByID(1785735212, path).then(($result: any) => {
         return $$createType1($result);
     });
+}
+
+/**
+ * PutValue creates or updates the value for a key.
+ * Key and value use the same display format as GetKeys/GetValue (UTF-8 or "0x" prefixed hex).
+ */
+export function PutValue(keyDisplay: string, valueDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(2473207079, keyDisplay, valueDisplay);
+}
+
+/**
+ * RenameKey renames a key while preserving its value.
+ * oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
+ */
+export function RenameKey(oldKeyDisplay: string, newKeyDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(2279504418, oldKeyDisplay, newKeyDisplay);
 }
 
 // Private type creation functions

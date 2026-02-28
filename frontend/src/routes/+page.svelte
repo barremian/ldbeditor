@@ -31,6 +31,7 @@
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
+  const VALUE_FORMAT_PREFS_STORAGE_KEY = "value-format-preferences";
   const KEY_SEARCH_DEBOUNCE_MS = 300;
   const DEFAULT_KEY_PANE_WIDTH = 320;
   const MIN_KEY_PANE_WIDTH = 300;
@@ -60,7 +61,8 @@
   let keys: string[] = [];
   let filteredKeys: string[] = [];
   let selectedKey: string | null = null;
-  let originalValue = "";
+  let originalValueRaw = "";
+  let editorValueRaw = "";
   let editorValue = "";
   let isSaving = false;
   let isDeleting = false;
@@ -98,6 +100,8 @@
   let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
+  let prettyPrintJson = false;
+  let valueFormatPrefsByDatabase: Record<string, { prettyPrintJson: boolean }> = {};
 
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
@@ -111,8 +115,8 @@
     return "";
   }
 
-  $: isDirty = selectedKey !== null && editorValue !== originalValue;
-  $: valueValidationError = getHexValidationError(editorValue, "Value");
+  $: isDirty = selectedKey !== null && editorValueRaw !== originalValueRaw;
+  $: valueValidationError = getHexValidationError(editorValueRaw, "Value");
   $: createKeyValidationError = getHexValidationError(newKeyInput, "New key");
   $: createValueValidationError = getHexValidationError(newValueInput, "New value");
   $: renameValidationError = getHexValidationError(renameInput, "New key");
@@ -150,9 +154,92 @@
 
   function clearSelection() {
     selectedKey = null;
-    originalValue = "";
+    originalValueRaw = "";
+    editorValueRaw = "";
     editorValue = "";
     isValueEditing = false;
+  }
+
+  function tryFormatJson(value: string): { formatted: string; isJson: boolean } {
+    try {
+      const parsed = JSON.parse(value);
+      return { formatted: JSON.stringify(parsed, null, 2), isJson: true };
+    } catch {
+      return { formatted: value, isJson: false };
+    }
+  }
+
+  function formatValueForDisplay(value: string): string {
+    if (!prettyPrintJson) return value;
+    return tryFormatJson(value).formatted;
+  }
+
+  function syncEditorDisplayWithRawValue() {
+    editorValue = formatValueForDisplay(editorValueRaw);
+  }
+
+  function loadValueFormatPrefs() {
+    try {
+      const stored = localStorage.getItem(VALUE_FORMAT_PREFS_STORAGE_KEY);
+      if (!stored) {
+        valueFormatPrefsByDatabase = {};
+        return;
+      }
+      const parsed = JSON.parse(stored) as Record<
+        string,
+        { prettyPrintJson?: unknown }
+      >;
+      valueFormatPrefsByDatabase = Object.entries(parsed ?? {}).reduce(
+        (acc, [path, preference]) => {
+          if (!path || typeof preference !== "object" || preference === null) {
+            return acc;
+          }
+          acc[path] = { prettyPrintJson: Boolean(preference.prettyPrintJson) };
+          return acc;
+        },
+        {} as Record<string, { prettyPrintJson: boolean }>,
+      );
+    } catch {
+      valueFormatPrefsByDatabase = {};
+    }
+  }
+
+  function saveValueFormatPrefs() {
+    try {
+      localStorage.setItem(
+        VALUE_FORMAT_PREFS_STORAGE_KEY,
+        JSON.stringify(valueFormatPrefsByDatabase),
+      );
+    } catch {
+      // ignore localStorage failures
+    }
+  }
+
+  function getPrettyPrintEnabled(path: string): boolean {
+    return Boolean(valueFormatPrefsByDatabase[path]?.prettyPrintJson);
+  }
+
+  function setPrettyPrintEnabled(path: string, enabled: boolean) {
+    if (!path) return;
+    valueFormatPrefsByDatabase = {
+      ...valueFormatPrefsByDatabase,
+      [path]: { prettyPrintJson: enabled },
+    };
+    saveValueFormatPrefs();
+  }
+
+  function togglePrettyPrintJson() {
+    if (!dbPath) return;
+    prettyPrintJson = !prettyPrintJson;
+    setPrettyPrintEnabled(dbPath, prettyPrintJson);
+    syncEditorDisplayWithRawValue();
+  }
+
+  function handleValueInput(event: Event) {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    editorValue = target.value;
+    editorValueRaw = target.value;
   }
 
   function getAutoRefreshLabel(intervalMs: number) {
@@ -397,6 +484,7 @@
       if (result.ok) {
         addToRecent(path);
         dbPath = path;
+        prettyPrintJson = getPrettyPrintEnabled(path);
         await loadKeys();
       } else {
         await Dialogs.Error({
@@ -523,17 +611,20 @@
     selectedKey = key;
     isValueEditing = false;
     valueLoading = true;
-    originalValue = "";
+    originalValueRaw = "";
+    editorValueRaw = "";
     editorValue = "";
 
     try {
       const value = await LevelDBService.GetValue(key);
-      originalValue = value ?? "";
-      editorValue = originalValue;
+      originalValueRaw = value ?? "";
+      editorValueRaw = originalValueRaw;
+      editorValue = formatValueForDisplay(editorValueRaw);
     } catch (err) {
       const message = `Error: ${err instanceof Error ? err.message : String(err)}`;
-      originalValue = message;
-      editorValue = message;
+      originalValueRaw = message;
+      editorValueRaw = message;
+      editorValue = formatValueForDisplay(editorValueRaw);
     } finally {
       valueLoading = false;
     }
@@ -564,8 +655,9 @@
 
     isSaving = true;
     try {
-      await LevelDBService.PutValue(selectedKey, editorValue);
-      originalValue = editorValue;
+      await LevelDBService.PutValue(selectedKey, editorValueRaw);
+      originalValueRaw = editorValueRaw;
+      syncEditorDisplayWithRawValue();
       isValueEditing = false;
     } catch (err) {
       await Dialogs.Error({
@@ -578,7 +670,8 @@
   }
 
   function revertValueChanges() {
-    editorValue = originalValue;
+    editorValueRaw = originalValueRaw;
+    syncEditorDisplayWithRawValue();
     isValueEditing = false;
   }
 
@@ -709,6 +802,7 @@
     }
     stopAutoRefresh();
     dbPath = "";
+    prettyPrintJson = false;
     keys = [];
     filteredKeys = [];
     keySearchInput = "";
@@ -830,6 +924,7 @@
 
   // Init
   loadRecentPaths();
+  loadValueFormatPrefs();
 </script>
 
 {#if dbPath}
@@ -1209,6 +1304,17 @@
               Value
             </CardTitle>
             <div class="flex items-center gap-2">
+              <Button
+                variant={prettyPrintJson ? "default" : "outline"}
+                size="sm"
+                class="gap-1.5"
+                disabled={!dbPath}
+                title="Toggle JSON pretty print for this database"
+                aria-pressed={prettyPrintJson}
+                on:click={togglePrettyPrintJson}
+              >
+                Pretty JSON: {prettyPrintJson ? "On" : "Off"}
+              </Button>
               {#if isDirty}
                 <Badge variant="secondary">Unsaved</Badge>
               {/if}
@@ -1272,6 +1378,7 @@
                   : "bg-muted/50 text-foreground"
               }`}
               bind:value={editorValue}
+              on:input={handleValueInput}
               readonly={!isValueEditing || isSaving}
               spellcheck="false"
             ></textarea>

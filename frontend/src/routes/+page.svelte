@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { Dialogs, Window } from "@wailsio/runtime";
   import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
   import { Badge } from "$lib/components/ui/badge";
@@ -75,6 +75,7 @@
   let keySearchInput = "";
   let debouncedKeySearch = "";
   let keySearchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
+  let renameInputElement: HTMLInputElement | null = null;
 
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
@@ -406,6 +407,12 @@
     if (isRenaming) return;
     editingKey = key;
     renameInput = key;
+    void tick().then(() => {
+      if (!renameInputElement) return;
+      renameInputElement.focus();
+      const end = renameInputElement.value.length;
+      renameInputElement.setSelectionRange(end, end);
+    });
   }
 
   async function createKey() {
@@ -809,6 +816,7 @@
                         <div class="min-w-0 flex-1">
                           <input
                             class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
+                            bind:this={renameInputElement}
                             bind:value={renameInput}
                             disabled={isRenaming}
                             on:click|stopPropagation

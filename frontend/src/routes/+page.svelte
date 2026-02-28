@@ -686,7 +686,7 @@
                 <p class="text-xs text-destructive">{createKeyValidationError}</p>
               {/if}
               <textarea
-                class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
                 placeholder="Initial value (text or 0x...)"
                 bind:value={newValueInput}
                 disabled={isCreating}
@@ -904,7 +904,7 @@
             </div>
           {:else}
             <textarea
-              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-xs leading-relaxed transition-colors ${
+              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors ${
                 isValueEditing
                   ? "bg-background text-foreground"
                   : "bg-muted/50 text-foreground"

@@ -1199,16 +1199,21 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/80 px-4 pt-2 backdrop-blur-sm">
+    <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end gap-1 border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
                   activeTabId === tab.id
-                    ? "relative z-10 border-border/60 border-b-transparent bg-background text-foreground"
-                    : "text-muted-foreground hover:bg-muted/40"
+                    ? "relative z-10 border-t-border/60 border-l-border/60 border-r-border/60 border-b-transparent bg-background text-foreground"
+                    : `text-muted-foreground hover:bg-muted/40 ${
+                        (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
+                        index === tabs.length - 1
+                          ? "border-r-border/60"
+                          : ""
+                      }`
                 }`}
               >
                 <TabsTrigger
@@ -1231,17 +1236,11 @@
                   <X class="h-3.5 w-3.5" />
                 </Button>
               </div>
-              {#if index < tabs.length - 1 && activeTabId !== tab.id && activeTabId !== tabs[index + 1].id}
-                <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
-              {/if}
             {/each}
-            {#if tabs.length > 0 && activeTabId !== tabs[tabs.length - 1].id}
-              <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
-            {/if}
             <Button
               variant="ghost"
               size="icon"
-              class="ml-1 h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              class="h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               title="New dashboard tab"
               on:click={() => {
                 void addDashboardTab();
@@ -1809,16 +1808,21 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/80 px-4 pt-2 backdrop-blur-sm">
+    <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end gap-1 border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
                   activeTabId === tab.id
-                    ? "relative z-10 border-border/60 border-b-transparent bg-background text-foreground"
-                    : "text-muted-foreground hover:bg-muted/40"
+                    ? "relative z-10 border-t-border/60 border-l-border/60 border-r-border/60 border-b-transparent bg-background text-foreground"
+                    : `text-muted-foreground hover:bg-muted/40 ${
+                        (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
+                        index === tabs.length - 1
+                          ? "border-r-border/60"
+                          : ""
+                      }`
                 }`}
               >
                 <TabsTrigger
@@ -1841,17 +1845,11 @@
                   <X class="h-3.5 w-3.5" />
                 </Button>
               </div>
-              {#if index < tabs.length - 1 && activeTabId !== tab.id && activeTabId !== tabs[index + 1].id}
-                <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
-              {/if}
             {/each}
-            {#if tabs.length > 0 && activeTabId !== tabs[tabs.length - 1].id}
-              <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
-            {/if}
             <Button
               variant="ghost"
               size="icon"
-              class="ml-1 h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              class="h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               title="New dashboard tab"
               on:click={() => {
                 void addDashboardTab();

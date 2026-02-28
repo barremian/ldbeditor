@@ -962,9 +962,7 @@
           </div>
           <CardDescription>
             {#if selectedKey}
-              {selectedKey.length > 60
-                ? selectedKey.slice(0, 60) + "…"
-                : selectedKey}
+                <span class="block w-full truncate" title={selectedKey}>{selectedKey}</span>
             {:else}
               Select a key to inspect its value
             {/if}

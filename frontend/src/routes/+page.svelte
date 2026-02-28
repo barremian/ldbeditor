@@ -904,10 +904,10 @@
             </div>
           {:else}
             <textarea
-              class={`h-full min-h-0 flex-1 rounded-md border border-border/70 p-2 font-mono text-xs leading-relaxed ${
+              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-xs leading-relaxed transition-colors ${
                 isValueEditing
                   ? "bg-background text-foreground"
-                  : "bg-muted/20 text-foreground/90"
+                  : "bg-muted/50 text-foreground"
               }`}
               bind:value={editorValue}
               readonly={!isValueEditing || isSaving}

@@ -101,7 +101,11 @@
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
   let prettyPrintJson = false;
-  let valueFormatPrefsByDatabase: Record<string, { prettyPrintJson: boolean }> = {};
+  let dbLocked = false;
+  let valueFormatPrefsByDatabase: Record<
+    string,
+    { prettyPrintJson: boolean; dbLocked: boolean }
+  > = {};
 
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
@@ -187,17 +191,20 @@
       }
       const parsed = JSON.parse(stored) as Record<
         string,
-        { prettyPrintJson?: unknown }
+        { prettyPrintJson?: unknown; dbLocked?: unknown }
       >;
       valueFormatPrefsByDatabase = Object.entries(parsed ?? {}).reduce(
         (acc, [path, preference]) => {
           if (!path || typeof preference !== "object" || preference === null) {
             return acc;
           }
-          acc[path] = { prettyPrintJson: Boolean(preference.prettyPrintJson) };
+          acc[path] = {
+            prettyPrintJson: Boolean(preference.prettyPrintJson),
+            dbLocked: Boolean(preference.dbLocked),
+          };
           return acc;
         },
-        {} as Record<string, { prettyPrintJson: boolean }>,
+        {} as Record<string, { prettyPrintJson: boolean; dbLocked: boolean }>,
       );
     } catch {
       valueFormatPrefsByDatabase = {};
@@ -219,13 +226,59 @@
     return Boolean(valueFormatPrefsByDatabase[path]?.prettyPrintJson);
   }
 
+  function getDatabaseLocked(path: string): boolean {
+    return Boolean(valueFormatPrefsByDatabase[path]?.dbLocked);
+  }
+
   function setPrettyPrintEnabled(path: string, enabled: boolean) {
     if (!path) return;
+    const existing = valueFormatPrefsByDatabase[path];
     valueFormatPrefsByDatabase = {
       ...valueFormatPrefsByDatabase,
-      [path]: { prettyPrintJson: enabled },
+      [path]: {
+        prettyPrintJson: enabled,
+        dbLocked: Boolean(existing?.dbLocked),
+      },
     };
     saveValueFormatPrefs();
+  }
+
+  function setDatabaseLocked(path: string, locked: boolean) {
+    if (!path) return;
+    const existing = valueFormatPrefsByDatabase[path];
+    valueFormatPrefsByDatabase = {
+      ...valueFormatPrefsByDatabase,
+      [path]: {
+        prettyPrintJson: Boolean(existing?.prettyPrintJson),
+        dbLocked: locked,
+      },
+    };
+    saveValueFormatPrefs();
+  }
+
+  async function toggleDatabaseLock() {
+    if (!dbPath) return;
+    const nextLocked = !dbLocked;
+
+    try {
+      await LevelDBService.SetDatabaseLocked(nextLocked);
+      dbLocked = nextLocked;
+      setDatabaseLocked(dbPath, nextLocked);
+
+      if (nextLocked) {
+        showCreateForm = false;
+        resetRenameForm();
+        keyPendingDelete = null;
+        if (isValueEditing) {
+          revertValueChanges();
+        }
+      }
+    } catch (err) {
+      await Dialogs.Error({
+        Title: "Database lock update failed",
+        Message: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   function togglePrettyPrintJson() {
@@ -490,6 +543,8 @@
         addToRecent(path);
         dbPath = path;
         prettyPrintJson = getPrettyPrintEnabled(path);
+        dbLocked = getDatabaseLocked(path);
+        await LevelDBService.SetDatabaseLocked(dbLocked);
         await loadKeys();
       } else {
         await Dialogs.Error({
@@ -643,7 +698,7 @@
   }
 
   function startValueEdit() {
-    if (!selectedKey || valueLoading || isSaving) return;
+    if (!selectedKey || valueLoading || isSaving || dbLocked) return;
     isValueEditing = true;
   }
 
@@ -652,6 +707,7 @@
       !selectedKey ||
       !isValueEditing ||
       isSaving ||
+      dbLocked ||
       !isDirty ||
       valueValidationError
     ) {
@@ -681,7 +737,7 @@
   }
 
   function startRename(key: string) {
-    if (isRenaming) return;
+    if (isRenaming || dbLocked) return;
     editingKey = key;
     renameInput = key;
     void tick().then(() => {
@@ -693,7 +749,12 @@
   }
 
   async function createKey() {
-    if (isCreating || createKeyValidationError || createValueValidationError) {
+    if (
+      isCreating ||
+      dbLocked ||
+      createKeyValidationError ||
+      createValueValidationError
+    ) {
       return;
     }
     if (!newKeyInput) {
@@ -730,7 +791,7 @@
   }
 
   async function renameEditingKey() {
-    if (!editingKey || isRenaming || renameValidationError) return;
+    if (!editingKey || isRenaming || dbLocked || renameValidationError) return;
     if (!renameInput) {
       await Dialogs.Error({
         Title: "Invalid key",
@@ -769,12 +830,12 @@
   }
 
   function requestDeleteKey(key: string) {
-    if (isDeleting) return;
+    if (isDeleting || dbLocked) return;
     keyPendingDelete = key;
   }
 
   async function confirmDeleteKey() {
-    if (!keyPendingDelete || isDeleting) return;
+    if (!keyPendingDelete || isDeleting || dbLocked) return;
     const targetKey = keyPendingDelete;
     if (isDirty && selectedKey === targetKey && !(await confirmDiscardUnsavedChanges())) {
       return;
@@ -808,6 +869,7 @@
     stopAutoRefresh();
     dbPath = "";
     prettyPrintJson = false;
+    dbLocked = false;
     keys = [];
     filteredKeys = [];
     keySearchInput = "";
@@ -869,6 +931,7 @@
           selectedKey &&
           isValueEditing &&
           isDirty &&
+          !dbLocked &&
           !isSaving &&
           !valueValidationError
         ) {
@@ -1089,6 +1152,7 @@
                 variant="outline"
                 size="sm"
                 class="gap-1.5"
+                disabled={dbLocked}
                 on:click={() => {
                   showCreateForm = !showCreateForm;
                   if (!showCreateForm) {
@@ -1135,7 +1199,7 @@
                 class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                 placeholder="New key (text or 0x...)"
                 bind:value={newKeyInput}
-                disabled={isCreating}
+                disabled={isCreating || dbLocked}
               />
               {#if createKeyValidationError}
                 <p class="text-xs text-destructive">{createKeyValidationError}</p>
@@ -1144,7 +1208,7 @@
                 class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
                 placeholder="Initial value (text or 0x...)"
                 bind:value={newValueInput}
-                disabled={isCreating}
+                disabled={isCreating || dbLocked}
               ></textarea>
               {#if createValueValidationError}
                 <p class="text-xs text-destructive">{createValueValidationError}</p>
@@ -1155,6 +1219,7 @@
                   class="gap-1.5"
                   disabled={
                     isCreating ||
+                    dbLocked ||
                     !!createKeyValidationError ||
                     !!createValueValidationError
                   }
@@ -1208,7 +1273,7 @@
                             class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
                             bind:this={renameInputElement}
                             bind:value={renameInput}
-                            disabled={isRenaming}
+                            disabled={isRenaming || dbLocked}
                             on:click|stopPropagation
                             on:keydown={(event) => {
                               if (event.key === "Enter") {
@@ -1229,7 +1294,10 @@
                             size="icon"
                             class="h-7 w-7"
                             disabled={
-                              isRenaming || !renameInput || !!renameValidationError
+                              isRenaming ||
+                              dbLocked ||
+                              !renameInput ||
+                              !!renameValidationError
                             }
                             on:click={(event) => {
                               event.stopPropagation();
@@ -1242,7 +1310,7 @@
                             variant="ghost"
                             size="icon"
                             class="h-7 w-7"
-                            disabled={isRenaming}
+                            disabled={isRenaming || dbLocked}
                             on:click={(event) => {
                               event.stopPropagation();
                               resetRenameForm();
@@ -1266,6 +1334,7 @@
                             variant="ghost"
                             size="icon"
                             class="h-7 w-7"
+                            disabled={dbLocked}
                             on:click={(event) => {
                               event.stopPropagation();
                               startRename(key);
@@ -1277,7 +1346,7 @@
                             variant="ghost"
                             size="icon"
                             class="h-7 w-7 text-destructive hover:text-destructive"
-                            disabled={isDeleting}
+                            disabled={isDeleting || dbLocked}
                             on:click={(event) => {
                               event.stopPropagation();
                               requestDeleteKey(key);
@@ -1309,6 +1378,23 @@
               Value
             </CardTitle>
             <div class="flex items-center gap-2">
+              {#if isDirty}
+                <Badge variant="secondary">Unsaved</Badge>
+              {/if}
+              {#if dbLocked}
+                <Badge variant="outline">Read-only</Badge>
+              {/if}
+              <Button
+                variant={dbLocked ? "default" : "outline"}
+                size="sm"
+                class="gap-1.5"
+                disabled={!dbPath}
+                title="Toggle read-only mode for this database"
+                aria-pressed={dbLocked}
+                on:click={toggleDatabaseLock}
+              >
+                Database lock: {dbLocked ? "On" : "Off"}
+              </Button>
               <Button
                 variant={prettyPrintJson ? "default" : "outline"}
                 size="sm"
@@ -1320,15 +1406,16 @@
               >
                 Pretty JSON: {prettyPrintJson ? "On" : "Off"}
               </Button>
-              {#if isDirty}
-                <Badge variant="secondary">Unsaved</Badge>
-              {/if}
               {#if isValueEditing}
                 <Button
                   size="sm"
                   class="gap-1.5"
                   disabled={
-                    !selectedKey || !isDirty || !!valueValidationError || isSaving
+                    !selectedKey ||
+                    !isDirty ||
+                    !!valueValidationError ||
+                    isSaving ||
+                    dbLocked
                   }
                   on:click={saveValue}
                 >
@@ -1349,7 +1436,7 @@
                 <Button
                   size="sm"
                   class="gap-1.5"
-                  disabled={!selectedKey || valueLoading || isSaving}
+                  disabled={!selectedKey || valueLoading || isSaving || dbLocked}
                   on:click={startValueEdit}
                 >
                   <Pencil class="h-3.5 w-3.5" />
@@ -1384,7 +1471,7 @@
               }`}
               bind:value={editorValue}
               on:input={handleValueInput}
-              readonly={!isValueEditing || isSaving}
+              readonly={!isValueEditing || isSaving || dbLocked}
               spellcheck="false"
             ></textarea>
             {#if valueValidationError}
@@ -1504,7 +1591,7 @@
         <Button
           variant="outline"
           size="sm"
-          disabled={isDeleting}
+          disabled={isDeleting || dbLocked}
           on:click={() => {
             keyPendingDelete = null;
           }}
@@ -1514,7 +1601,7 @@
         <Button
           variant="destructive"
           size="sm"
-          disabled={isDeleting}
+          disabled={isDeleting || dbLocked}
           on:click={confirmDeleteKey}
         >
           <Trash2 class="mr-1.5 h-3.5 w-3.5" />

@@ -14,7 +14,12 @@ import (
 type LevelDBService struct {
 	mu sync.RWMutex
 	db *leveldb.DB
+
+	// dbLocked controls whether write operations are allowed.
+	dbLocked bool
 }
+
+var errDatabaseLocked = errors.New("database is locked")
 
 // OpenDatabaseResult is the result of opening a LevelDB database.
 type OpenDatabaseResult struct {
@@ -39,6 +44,7 @@ func (s *LevelDBService) OpenDatabase(path string) OpenDatabaseResult {
 	}
 
 	s.db = db
+	s.dbLocked = false
 	return OpenDatabaseResult{Ok: true}
 }
 
@@ -99,12 +105,9 @@ func (s *LevelDBService) GetValue(keyDisplay string) (string, error) {
 // PutValue creates or updates the value for a key.
 // Key and value use the same display format as GetKeys/GetValue (UTF-8 or "0x" prefixed hex).
 func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error {
-	s.mu.RLock()
-	db := s.db
-	s.mu.RUnlock()
-
-	if db == nil {
-		return errors.New("database is not open")
+	db, err := s.writableDatabase()
+	if err != nil {
+		return err
 	}
 
 	key, err := displayStringToBytes(keyDisplay)
@@ -123,12 +126,9 @@ func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error 
 // DeleteKey deletes the given key.
 // keyDisplay uses the same format as returned by GetKeys.
 func (s *LevelDBService) DeleteKey(keyDisplay string) error {
-	s.mu.RLock()
-	db := s.db
-	s.mu.RUnlock()
-
-	if db == nil {
-		return errors.New("database is not open")
+	db, err := s.writableDatabase()
+	if err != nil {
+		return err
 	}
 
 	key, err := displayStringToBytes(keyDisplay)
@@ -142,12 +142,9 @@ func (s *LevelDBService) DeleteKey(keyDisplay string) error {
 // RenameKey renames a key while preserving its value.
 // oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
 func (s *LevelDBService) RenameKey(oldKeyDisplay string, newKeyDisplay string) error {
-	s.mu.RLock()
-	db := s.db
-	s.mu.RUnlock()
-
-	if db == nil {
-		return errors.New("database is not open")
+	db, err := s.writableDatabase()
+	if err != nil {
+		return err
 	}
 
 	oldKey, err := displayStringToBytes(oldKeyDisplay)
@@ -186,6 +183,19 @@ func (s *LevelDBService) RenameKey(oldKeyDisplay string, newKeyDisplay string) e
 	return db.Write(batch, nil)
 }
 
+// SetDatabaseLocked sets whether write operations are blocked for the open database.
+func (s *LevelDBService) SetDatabaseLocked(locked bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.db == nil {
+		return errors.New("database is not open")
+	}
+
+	s.dbLocked = locked
+	return nil
+}
+
 // CloseDatabase closes the currently open database.
 func (s *LevelDBService) CloseDatabase() error {
 	s.mu.Lock()
@@ -197,7 +207,23 @@ func (s *LevelDBService) CloseDatabase() error {
 
 	err := s.db.Close()
 	s.db = nil
+	s.dbLocked = false
 	return err
+}
+
+func (s *LevelDBService) writableDatabase() (*leveldb.DB, error) {
+	s.mu.RLock()
+	db := s.db
+	locked := s.dbLocked
+	s.mu.RUnlock()
+
+	if db == nil {
+		return nil, errors.New("database is not open")
+	}
+	if locked {
+		return nil, errDatabaseLocked
+	}
+	return db, nil
 }
 
 // bytesToDisplayString converts bytes to a display string. Valid UTF-8 is returned as-is; otherwise hex is used.

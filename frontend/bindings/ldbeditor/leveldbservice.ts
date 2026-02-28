@@ -75,6 +75,13 @@ export function RenameKey(oldKeyDisplay: string, newKeyDisplay: string): $Cancel
     return $Call.ByID(2279504418, oldKeyDisplay, newKeyDisplay);
 }
 
+/**
+ * SetDatabaseLocked sets whether write operations are blocked for the open database.
+ */
+export function SetDatabaseLocked(locked: boolean): $CancellablePromise<void> {
+    return $Call.ByID(659892384, locked);
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = $models.OpenDatabaseResult.createFrom;

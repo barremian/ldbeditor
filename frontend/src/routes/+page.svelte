@@ -30,7 +30,7 @@
   const MAX_RECENT = 10;
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
   const DEFAULT_KEY_PANE_WIDTH = 320;
-  const MIN_KEY_PANE_WIDTH = 240;
+  const MIN_KEY_PANE_WIDTH = 300;
   const MIN_VALUE_PANE_WIDTH = 320;
   const GRID_GAP_PX = 16;
   const SPLIT_CONTAINER_PADDING_PX = 16;

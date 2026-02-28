@@ -922,58 +922,65 @@
     </div>
   </div>
 {:else}
-  <div class="flex min-h-screen items-center justify-center p-6">
-    <Card class="w-full max-w-2xl">
-      <CardHeader class="space-y-4">
-        <div class="flex items-center justify-between">
-          <CardTitle class="flex items-center gap-2 text-2xl">
-            <Database class="h-6 w-6 text-primary" />
-            LevelDB Editor
-          </CardTitle>
-          <Badge variant="outline">Desktop</Badge>
-        </div>
-        <CardDescription>
-          Open a LevelDB folder to browse keys and inspect values instantly.
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="space-y-6">
-        <Button
-          class="gap-2"
-          on:click={openDatabaseFromDialog}
-          disabled={loading}
-        >
-          <FolderOpen class="h-4 w-4" />
-          {loading ? "Opening…" : "Open LevelDB database"}
-        </Button>
+  <div class="flex h-screen flex-col">
+    <div
+      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-sm"
+      role="none"
+      on:dblclick={handleTitlebarDoubleClick}
+    ></div>
+    <div class="flex min-h-0 flex-1 items-center justify-center p-6">
+      <Card class="w-full max-w-2xl">
+        <CardHeader class="space-y-4">
+          <div class="flex items-center justify-between">
+            <CardTitle class="flex items-center gap-2 text-2xl">
+              <Database class="h-6 w-6 text-primary" />
+              LevelDB Editor
+            </CardTitle>
+            <Badge variant="outline">Desktop</Badge>
+          </div>
+          <CardDescription>
+            Open a LevelDB folder to browse keys and inspect values instantly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <Button
+            class="gap-2"
+            on:click={openDatabaseFromDialog}
+            disabled={loading}
+          >
+            <FolderOpen class="h-4 w-4" />
+            {loading ? "Opening…" : "Open LevelDB database"}
+          </Button>
 
-        {#if errorMessage}
-          <p class="text-sm text-destructive">{errorMessage}</p>
-        {/if}
+          {#if errorMessage}
+            <p class="text-sm text-destructive">{errorMessage}</p>
+          {/if}
 
-        {#if recentPaths.length > 0}
-          <section class="space-y-3">
-            <h2
-              class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-            >
-              <History class="h-4 w-4" />
-              Recently opened
-            </h2>
-            <div class="space-y-2">
-              {#each recentPaths as item}
-                <Button
-                  variant="ghost"
-                  class="w-full justify-start font-normal"
-                  on:click={() => openDatabaseFromPath(item.path)}
-                  disabled={loading}
-                >
-                  {item.label}
-                </Button>
-              {/each}
-            </div>
-          </section>
-        {/if}
-      </CardContent>
-    </Card>
+          {#if recentPaths.length > 0}
+            <section class="space-y-3">
+              <h2
+                class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+              >
+                <History class="h-4 w-4" />
+                Recently opened
+              </h2>
+              <div class="space-y-2">
+                {#each recentPaths as item}
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start font-normal"
+                    on:click={() => openDatabaseFromPath(item.path)}
+                    disabled={loading}
+                  >
+                    {item.label}
+                  </Button>
+                {/each}
+              </div>
+            </section>
+          {/if}
+        </CardContent>
+      </Card>
+    </div>
   </div>
 {/if}
 

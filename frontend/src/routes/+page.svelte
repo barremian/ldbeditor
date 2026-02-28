@@ -13,6 +13,7 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
   import {
     Check,
     ChevronDown,
@@ -57,6 +58,12 @@
   let recentPaths: { path: string; label: string }[] = [];
   let loading = false;
   let errorMessage = "";
+  type WorkspaceTab =
+    | { id: string; type: "dashboard"; title: string }
+    | { id: string; type: "database"; title: string; path: string };
+  let nextTabId = 2;
+  let tabs: WorkspaceTab[] = [{ id: "tab-1", type: "dashboard", title: "Dashboard" }];
+  let activeTabId = tabs[0].id;
 
   // Editor view state
   let dbPath = "";
@@ -265,7 +272,7 @@
     const nextLocked = !dbLocked;
 
     try {
-      await LevelDBService.SetDatabaseLocked(nextLocked);
+      await LevelDBService.SetDatabaseLocked(dbPath, nextLocked);
       dbLocked = nextLocked;
       setDatabaseLocked(dbPath, nextLocked);
 
@@ -534,6 +541,106 @@
     saveRecentPaths(paths);
   }
 
+  function getTabLabel(path: string) {
+    return path.split(/[/\\]/).pop() || path;
+  }
+
+  function getActiveTab() {
+    return tabs.find((tab) => tab.id === activeTabId) ?? null;
+  }
+
+  function findDatabaseTabByPath(path: string) {
+    return tabs.find((tab) => tab.type === "database" && tab.path === path) ?? null;
+  }
+
+  function resetEditorViewState() {
+    stopAutoRefresh();
+    dbPath = "";
+    prettyPrintJson = false;
+    dbLocked = false;
+    keys = [];
+    filteredKeys = [];
+    keySearchInput = "";
+    debouncedKeySearch = "";
+    if (keySearchDebounceTimeout) {
+      clearTimeout(keySearchDebounceTimeout);
+      keySearchDebounceTimeout = null;
+    }
+    clearSelection();
+    resetCreateForm();
+    resetRenameForm();
+    keyPendingDelete = null;
+    isValueEditing = false;
+    isRefreshMenuOpen = false;
+    isViewMenuOpen = false;
+  }
+
+  async function activateTab(
+    tabId: string,
+    options: { skipDirtyCheck?: boolean; force?: boolean } = {},
+  ) {
+    if (tabId === activeTabId && !options.force) return;
+    if (!options.skipDirtyCheck && isDirty && !(await confirmDiscardUnsavedChanges())) return;
+
+    const nextTab = tabs.find((tab) => tab.id === tabId);
+    if (!nextTab) return;
+
+    activeTabId = tabId;
+
+    if (nextTab.type === "dashboard") {
+      resetEditorViewState();
+      return;
+    }
+
+    dbPath = nextTab.path;
+    prettyPrintJson = getPrettyPrintEnabled(dbPath);
+    dbLocked = getDatabaseLocked(dbPath);
+    await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
+    await loadKeys();
+  }
+
+  async function addDashboardTab() {
+    const tab: WorkspaceTab = {
+      id: `tab-${nextTabId++}`,
+      type: "dashboard",
+      title: "Dashboard",
+    };
+    tabs = [...tabs, tab];
+    await activateTab(tab.id);
+  }
+
+  function handleTabValueChange(nextTabIdValue: string | undefined) {
+    if (!nextTabIdValue) return;
+    void activateTab(nextTabIdValue);
+  }
+
+  async function closeTab(tabId: string) {
+    const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
+    const closingActiveTab = tabId === activeTabId;
+    if (closingActiveTab && isDirty && !(await confirmDiscardUnsavedChanges())) return;
+
+    const tab = tabs[tabIndex];
+    if (tab.type === "database") {
+      try {
+        await LevelDBService.CloseDatabase(tab.path);
+      } catch {
+        // ignore close errors while closing tab
+      }
+    }
+
+    tabs = tabs.filter((item) => item.id !== tabId);
+    if (tabs.length === 0) {
+      await Window.Close();
+      return;
+    }
+
+    if (!closingActiveTab) return;
+
+    const nextIndex = Math.max(0, Math.min(tabIndex, tabs.length - 1));
+    await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
+  }
+
   async function openDatabaseFromPath(path: string) {
     if (!path || path.trim() === "") return;
 
@@ -541,15 +648,42 @@
     errorMessage = "";
 
     try {
-      const result: OpenDatabaseResult =
-        await LevelDBService.OpenDatabase(path);
+      const result: OpenDatabaseResult = await LevelDBService.OpenDatabase(path);
       if (result.ok) {
-        addToRecent(path);
-        dbPath = path;
-        prettyPrintJson = getPrettyPrintEnabled(path);
-        dbLocked = getDatabaseLocked(path);
-        await LevelDBService.SetDatabaseLocked(dbLocked);
-        await loadKeys();
+        const canonicalPath = result.canonicalPath || path;
+        addToRecent(canonicalPath);
+        const activeTab = getActiveTab();
+        const activeDashboardTabId =
+          activeTab && activeTab.type === "dashboard" ? activeTab.id : null;
+        const existingTab = findDatabaseTabByPath(canonicalPath);
+        if (existingTab) {
+          if (activeDashboardTabId && activeDashboardTabId !== existingTab.id) {
+            tabs = tabs.filter((tab) => tab.id !== activeDashboardTabId);
+          }
+          await activateTab(existingTab.id, { skipDirtyCheck: true });
+          return;
+        }
+
+        if (activeDashboardTabId) {
+          const replacementTab: WorkspaceTab = {
+            id: activeDashboardTabId,
+            type: "database",
+            title: getTabLabel(canonicalPath),
+            path: canonicalPath,
+          };
+          tabs = tabs.map((tab) => (tab.id === activeDashboardTabId ? replacementTab : tab));
+          await activateTab(activeDashboardTabId, { skipDirtyCheck: true, force: true });
+          return;
+        }
+
+        const newTab: WorkspaceTab = {
+          id: `tab-${nextTabId++}`,
+          type: "database",
+          title: getTabLabel(canonicalPath),
+          path: canonicalPath,
+        };
+        tabs = [...tabs, newTab];
+        await activateTab(newTab.id);
       } else {
         await Dialogs.Error({
           Title: "Invalid Database",
@@ -596,7 +730,7 @@
     const selectedBeforeReload = preserveSelection ? selectedKey : null;
     loading = true;
     try {
-      const keyList = await LevelDBService.GetKeys();
+      const keyList = await LevelDBService.GetKeys(dbPath);
       if (requestId !== refreshRequestId) return false;
       keys = keyList ?? [];
 
@@ -680,7 +814,7 @@
     editorValue = "";
 
     try {
-      const value = await LevelDBService.GetValue(key);
+      const value = await LevelDBService.GetValue(dbPath, key);
       originalValueRaw = value ?? "";
       editorValueRaw = originalValueRaw;
       editorValue = formatValueForDisplay(editorValueRaw);
@@ -751,6 +885,7 @@
     isSaving = true;
     try {
       const saveResult = await LevelDBService.PutValueIfUnchanged(
+        dbPath,
         keyToSave,
         expectedValueRaw,
         localValueRaw,
@@ -765,6 +900,7 @@
 
         if (overwriteLocalChanges) {
           const overwriteResult = await LevelDBService.PutValueIfUnchanged(
+            dbPath,
             keyToSave,
             expectedValueRaw,
             localValueRaw,
@@ -849,7 +985,7 @@
 
     isCreating = true;
     try {
-      await LevelDBService.PutValue(newKeyInput, newValueInput);
+      await LevelDBService.PutValue(dbPath, newKeyInput, newValueInput);
       const createdKey = newKeyInput;
       await loadKeys();
       resetCreateForm();
@@ -888,7 +1024,7 @@
 
     isRenaming = true;
     try {
-      await LevelDBService.RenameKey(editingKey, renameInput);
+      await LevelDBService.RenameKey(dbPath, editingKey, renameInput);
       const renamedKey = renameInput;
       await loadKeys();
       resetRenameForm();
@@ -917,7 +1053,7 @@
 
     isDeleting = true;
     try {
-      await LevelDBService.DeleteKey(targetKey);
+      await LevelDBService.DeleteKey(dbPath, targetKey);
       await loadKeys();
       if (editingKey === targetKey) {
         resetRenameForm();
@@ -934,31 +1070,7 @@
   }
 
   async function closeDatabase() {
-    if (!(await confirmDiscardUnsavedChanges())) return;
-    try {
-      await LevelDBService.CloseDatabase();
-    } catch {
-      // ignore
-    }
-    stopAutoRefresh();
-    dbPath = "";
-    prettyPrintJson = false;
-    dbLocked = false;
-    keys = [];
-    filteredKeys = [];
-    keySearchInput = "";
-    debouncedKeySearch = "";
-    if (keySearchDebounceTimeout) {
-      clearTimeout(keySearchDebounceTimeout);
-      keySearchDebounceTimeout = null;
-    }
-    clearSelection();
-    resetCreateForm();
-    resetRenameForm();
-    keyPendingDelete = null;
-    isValueEditing = false;
-    isRefreshMenuOpen = false;
-    isViewMenuOpen = false;
+    await closeTab(activeTabId);
   }
 
   async function handleTitlebarDoubleClick() {
@@ -1087,6 +1199,60 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
+    <div class="bg-background/80 px-4 pt-2 backdrop-blur-sm">
+      <ScrollArea orientation="horizontal" class="w-full">
+        <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
+          <TabsList class="relative h-auto w-max min-w-full items-end gap-1 border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+            {#each tabs as tab, index (tab.id)}
+              <div
+                class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
+                  activeTabId === tab.id
+                    ? "relative z-10 border-border/60 border-b-transparent bg-background text-foreground"
+                    : "text-muted-foreground hover:bg-muted/40"
+                }`}
+              >
+                <TabsTrigger
+                  value={tab.id}
+                  class="max-w-[220px] truncate rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  title={tab.type === "database" ? tab.path : tab.title}
+                >
+                  {tab.type === "database" ? tab.title : "Dashboard"}
+                </TabsTrigger>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  title={`Close ${tab.title}`}
+                  on:click={(event) => {
+                    event.stopPropagation();
+                    void closeTab(tab.id);
+                  }}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {#if index < tabs.length - 1 && activeTabId !== tab.id && activeTabId !== tabs[index + 1].id}
+                <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
+              {/if}
+            {/each}
+            {#if tabs.length > 0 && activeTabId !== tabs[tabs.length - 1].id}
+              <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
+            {/if}
+            <Button
+              variant="ghost"
+              size="icon"
+              class="ml-1 h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              title="New dashboard tab"
+              on:click={() => {
+                void addDashboardTab();
+              }}
+            >
+              <Plus class="h-4 w-4" />
+            </Button>
+          </TabsList>
+        </Tabs>
+      </ScrollArea>
+    </div>
     <header
       class="relative z-40 overflow-visible border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
     >
@@ -1643,6 +1809,60 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
+    <div class="bg-background/80 px-4 pt-2 backdrop-blur-sm">
+      <ScrollArea orientation="horizontal" class="w-full">
+        <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
+          <TabsList class="relative h-auto w-max min-w-full items-end gap-1 border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+            {#each tabs as tab, index (tab.id)}
+              <div
+                class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
+                  activeTabId === tab.id
+                    ? "relative z-10 border-border/60 border-b-transparent bg-background text-foreground"
+                    : "text-muted-foreground hover:bg-muted/40"
+                }`}
+              >
+                <TabsTrigger
+                  value={tab.id}
+                  class="max-w-[220px] truncate rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  title={tab.type === "database" ? tab.path : tab.title}
+                >
+                  {tab.type === "database" ? tab.title : "Dashboard"}
+                </TabsTrigger>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  title={`Close ${tab.title}`}
+                  on:click={(event) => {
+                    event.stopPropagation();
+                    void closeTab(tab.id);
+                  }}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {#if index < tabs.length - 1 && activeTabId !== tab.id && activeTabId !== tabs[index + 1].id}
+                <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
+              {/if}
+            {/each}
+            {#if tabs.length > 0 && activeTabId !== tabs[tabs.length - 1].id}
+              <div class="mx-0.5 h-4 w-px self-center bg-border/60"></div>
+            {/if}
+            <Button
+              variant="ghost"
+              size="icon"
+              class="ml-1 h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              title="New dashboard tab"
+              on:click={() => {
+                void addDashboardTab();
+              }}
+            >
+              <Plus class="h-4 w-4" />
+            </Button>
+          </TabsList>
+        </Tabs>
+      </ScrollArea>
+    </div>
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
       <Card class="w-full max-w-2xl">
         <CardHeader class="space-y-4">

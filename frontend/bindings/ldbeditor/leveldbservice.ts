@@ -15,27 +15,27 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
- * CloseDatabase closes the currently open database.
+ * CloseDatabase releases one open reference for a database path and closes the DB when refcount reaches zero.
  */
-export function CloseDatabase(): $CancellablePromise<void> {
-    return $Call.ByID(2257836302);
+export function CloseDatabase(path: string): $CancellablePromise<void> {
+    return $Call.ByID(2257836302, path);
 }
 
 /**
  * DeleteKey deletes the given key.
  * keyDisplay uses the same format as returned by GetKeys.
  */
-export function DeleteKey(keyDisplay: string): $CancellablePromise<void> {
-    return $Call.ByID(277474761, keyDisplay);
+export function DeleteKey(path: string, keyDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(277474761, path, keyDisplay);
 }
 
 /**
- * GetKeys returns all keys in the currently open database.
+ * GetKeys returns all keys in the requested open database.
  * Keys are returned in lexicographic order.
  * Non-UTF-8 keys are hex-encoded.
  */
-export function GetKeys(): $CancellablePromise<string[]> {
-    return $Call.ByID(3118125663).then(($result: any) => {
+export function GetKeys(path: string): $CancellablePromise<string[]> {
+    return $Call.ByID(3118125663, path).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -45,8 +45,8 @@ export function GetKeys(): $CancellablePromise<string[]> {
  * The key should be in the same format as returned by GetKeys (UTF-8 or hex with "0x" prefix).
  * Non-UTF-8 values are hex-encoded in the response.
  */
-export function GetValue(keyDisplay: string): $CancellablePromise<string> {
-    return $Call.ByID(2570607492, keyDisplay);
+export function GetValue(path: string, keyDisplay: string): $CancellablePromise<string> {
+    return $Call.ByID(2570607492, path, keyDisplay);
 }
 
 /**
@@ -63,16 +63,16 @@ export function OpenDatabase(path: string): $CancellablePromise<$models.OpenData
  * PutValue creates or updates the value for a key.
  * Key and value use the same display format as GetKeys/GetValue (UTF-8 or "0x" prefixed hex).
  */
-export function PutValue(keyDisplay: string, valueDisplay: string): $CancellablePromise<void> {
-    return $Call.ByID(2473207079, keyDisplay, valueDisplay);
+export function PutValue(path: string, keyDisplay: string, valueDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(2473207079, path, keyDisplay, valueDisplay);
 }
 
 /**
  * PutValueIfUnchanged updates a key only if its current value matches expectedValueDisplay.
  * Set force=true to overwrite regardless of current database value.
  */
-export function PutValueIfUnchanged(keyDisplay: string, expectedValueDisplay: string, newValueDisplay: string, force: boolean): $CancellablePromise<$models.PutValueIfUnchangedResult> {
-    return $Call.ByID(1648540501, keyDisplay, expectedValueDisplay, newValueDisplay, force).then(($result: any) => {
+export function PutValueIfUnchanged(path: string, keyDisplay: string, expectedValueDisplay: string, newValueDisplay: string, force: boolean): $CancellablePromise<$models.PutValueIfUnchangedResult> {
+    return $Call.ByID(1648540501, path, keyDisplay, expectedValueDisplay, newValueDisplay, force).then(($result: any) => {
         return $$createType2($result);
     });
 }
@@ -81,15 +81,15 @@ export function PutValueIfUnchanged(keyDisplay: string, expectedValueDisplay: st
  * RenameKey renames a key while preserving its value.
  * oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
  */
-export function RenameKey(oldKeyDisplay: string, newKeyDisplay: string): $CancellablePromise<void> {
-    return $Call.ByID(2279504418, oldKeyDisplay, newKeyDisplay);
+export function RenameKey(path: string, oldKeyDisplay: string, newKeyDisplay: string): $CancellablePromise<void> {
+    return $Call.ByID(2279504418, path, oldKeyDisplay, newKeyDisplay);
 }
 
 /**
  * SetDatabaseLocked sets whether write operations are blocked for the open database.
  */
-export function SetDatabaseLocked(locked: boolean): $CancellablePromise<void> {
-    return $Call.ByID(659892384, locked);
+export function SetDatabaseLocked(path: string, locked: boolean): $CancellablePromise<void> {
+    return $Call.ByID(659892384, path, locked);
 }
 
 // Private type creation functions

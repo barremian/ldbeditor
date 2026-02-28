@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"unicode/utf8"
 
@@ -14,18 +15,23 @@ import (
 // LevelDBService provides LevelDB database operations for the frontend.
 type LevelDBService struct {
 	mu sync.RWMutex
-	db *leveldb.DB
+	dbs map[string]*dbEntry
+}
 
-	// dbLocked controls whether write operations are allowed.
+type dbEntry struct {
+	db       *leveldb.DB
 	dbLocked bool
+	refCount int
 }
 
 var errDatabaseLocked = errors.New("database is locked")
 
 // OpenDatabaseResult is the result of opening a LevelDB database.
 type OpenDatabaseResult struct {
-	Ok    bool   `json:"ok"`
-	Error string `json:"error"`
+	Ok            bool   `json:"ok"`
+	Error         string `json:"error"`
+	CanonicalPath string `json:"canonicalPath"`
+	AlreadyOpen   bool   `json:"alreadyOpen"`
 }
 
 // PutValueIfUnchangedResult is the result of a guarded value write.
@@ -39,34 +45,51 @@ type PutValueIfUnchangedResult struct {
 // OpenDatabase opens a LevelDB database at the given path.
 // Returns Ok=true on success, Ok=false with Error set when the path is not a valid LevelDB database.
 func (s *LevelDBService) OpenDatabase(path string) OpenDatabaseResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.db != nil {
-		_ = s.db.Close()
-		s.db = nil
-	}
-
-	db, err := leveldb.OpenFile(path, nil)
+	canonicalPath, err := canonicalizePath(path)
 	if err != nil {
 		return OpenDatabaseResult{Ok: false, Error: err.Error()}
 	}
 
-	s.db = db
-	s.dbLocked = false
-	return OpenDatabaseResult{Ok: true}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dbs == nil {
+		s.dbs = map[string]*dbEntry{}
+	}
+
+	if existing, ok := s.dbs[canonicalPath]; ok {
+		existing.refCount++
+		return OpenDatabaseResult{
+			Ok:            true,
+			CanonicalPath: canonicalPath,
+			AlreadyOpen:   true,
+		}
+	}
+
+	db, openErr := leveldb.OpenFile(canonicalPath, nil)
+	if openErr != nil {
+		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
+	}
+
+	s.dbs[canonicalPath] = &dbEntry{
+		db:       db,
+		dbLocked: false,
+		refCount: 1,
+	}
+	return OpenDatabaseResult{
+		Ok:            true,
+		CanonicalPath: canonicalPath,
+		AlreadyOpen:   false,
+	}
 }
 
-// GetKeys returns all keys in the currently open database.
+// GetKeys returns all keys in the requested open database.
 // Keys are returned in lexicographic order.
 // Non-UTF-8 keys are hex-encoded.
-func (s *LevelDBService) GetKeys() ([]string, error) {
-	s.mu.RLock()
-	db := s.db
-	s.mu.RUnlock()
-
-	if db == nil {
-		return nil, nil
+func (s *LevelDBService) GetKeys(path string) ([]string, error) {
+	db, err := s.readableDatabase(path)
+	if err != nil {
+		return nil, err
 	}
 
 	var keys []string
@@ -89,23 +112,20 @@ func (s *LevelDBService) GetKeys() ([]string, error) {
 // GetValue returns the value for the given key.
 // The key should be in the same format as returned by GetKeys (UTF-8 or hex with "0x" prefix).
 // Non-UTF-8 values are hex-encoded in the response.
-func (s *LevelDBService) GetValue(keyDisplay string) (string, error) {
-	s.mu.RLock()
-	db := s.db
-	s.mu.RUnlock()
-
-	if db == nil {
-		return "", nil
-	}
-
-	key, err := displayStringToBytes(keyDisplay)
+func (s *LevelDBService) GetValue(path string, keyDisplay string) (string, error) {
+	db, err := s.readableDatabase(path)
 	if err != nil {
 		return "", err
 	}
 
-	value, err := db.Get(key, nil)
-	if err != nil {
-		return "", err
+	key, decodeErr := displayStringToBytes(keyDisplay)
+	if decodeErr != nil {
+		return "", decodeErr
+	}
+
+	value, getErr := db.Get(key, nil)
+	if getErr != nil {
+		return "", getErr
 	}
 
 	return bytesToDisplayString(value), nil
@@ -113,8 +133,8 @@ func (s *LevelDBService) GetValue(keyDisplay string) (string, error) {
 
 // PutValue creates or updates the value for a key.
 // Key and value use the same display format as GetKeys/GetValue (UTF-8 or "0x" prefixed hex).
-func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error {
-	db, err := s.writableDatabase()
+func (s *LevelDBService) PutValue(path string, keyDisplay string, valueDisplay string) error {
+	db, err := s.writableDatabase(path)
 	if err != nil {
 		return err
 	}
@@ -134,8 +154,8 @@ func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error 
 
 // PutValueIfUnchanged updates a key only if its current value matches expectedValueDisplay.
 // Set force=true to overwrite regardless of current database value.
-func (s *LevelDBService) PutValueIfUnchanged(keyDisplay string, expectedValueDisplay string, newValueDisplay string, force bool) (PutValueIfUnchangedResult, error) {
-	db, err := s.writableDatabase()
+func (s *LevelDBService) PutValueIfUnchanged(path string, keyDisplay string, expectedValueDisplay string, newValueDisplay string, force bool) (PutValueIfUnchangedResult, error) {
+	db, err := s.writableDatabase(path)
 	if err != nil {
 		return PutValueIfUnchangedResult{}, err
 	}
@@ -189,8 +209,8 @@ func (s *LevelDBService) PutValueIfUnchanged(keyDisplay string, expectedValueDis
 
 // DeleteKey deletes the given key.
 // keyDisplay uses the same format as returned by GetKeys.
-func (s *LevelDBService) DeleteKey(keyDisplay string) error {
-	db, err := s.writableDatabase()
+func (s *LevelDBService) DeleteKey(path string, keyDisplay string) error {
+	db, err := s.writableDatabase(path)
 	if err != nil {
 		return err
 	}
@@ -205,8 +225,8 @@ func (s *LevelDBService) DeleteKey(keyDisplay string) error {
 
 // RenameKey renames a key while preserving its value.
 // oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
-func (s *LevelDBService) RenameKey(oldKeyDisplay string, newKeyDisplay string) error {
-	db, err := s.writableDatabase()
+func (s *LevelDBService) RenameKey(path string, oldKeyDisplay string, newKeyDisplay string) error {
+	db, err := s.writableDatabase(path)
 	if err != nil {
 		return err
 	}
@@ -248,46 +268,93 @@ func (s *LevelDBService) RenameKey(oldKeyDisplay string, newKeyDisplay string) e
 }
 
 // SetDatabaseLocked sets whether write operations are blocked for the open database.
-func (s *LevelDBService) SetDatabaseLocked(locked bool) error {
+func (s *LevelDBService) SetDatabaseLocked(path string, locked bool) error {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.db == nil {
+	entry, ok := s.dbs[canonicalPath]
+	if !ok {
 		return errors.New("database is not open")
 	}
 
-	s.dbLocked = locked
+	entry.dbLocked = locked
 	return nil
 }
 
-// CloseDatabase closes the currently open database.
-func (s *LevelDBService) CloseDatabase() error {
+// CloseDatabase releases one open reference for a database path and closes the DB when refcount reaches zero.
+func (s *LevelDBService) CloseDatabase(path string) error {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.db == nil {
+	entry, ok := s.dbs[canonicalPath]
+	if !ok {
 		return nil
 	}
 
-	err := s.db.Close()
-	s.db = nil
-	s.dbLocked = false
-	return err
+	entry.refCount--
+	if entry.refCount > 0 {
+		return nil
+	}
+
+	closeErr := entry.db.Close()
+	delete(s.dbs, canonicalPath)
+	return closeErr
 }
 
-func (s *LevelDBService) writableDatabase() (*leveldb.DB, error) {
+func (s *LevelDBService) readableDatabase(path string) (*leveldb.DB, error) {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
-	db := s.db
-	locked := s.dbLocked
+	entry, ok := s.dbs[canonicalPath]
 	s.mu.RUnlock()
 
-	if db == nil {
+	if !ok || entry.db == nil {
 		return nil, errors.New("database is not open")
 	}
-	if locked {
+	return entry.db, nil
+}
+
+func (s *LevelDBService) writableDatabase(path string) (*leveldb.DB, error) {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	entry, ok := s.dbs[canonicalPath]
+	s.mu.RUnlock()
+
+	if !ok || entry.db == nil {
+		return nil, errors.New("database is not open")
+	}
+	if entry.dbLocked {
 		return nil, errDatabaseLocked
 	}
-	return db, nil
+	return entry.db, nil
+}
+
+func canonicalizePath(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("database path is required")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(abs), nil
 }
 
 // bytesToDisplayString converts bytes to a display string. Valid UTF-8 is returned as-is; otherwise hex is used.

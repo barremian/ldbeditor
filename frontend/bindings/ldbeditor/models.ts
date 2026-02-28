@@ -11,6 +11,8 @@ import { Create as $Create } from "@wailsio/runtime";
 export class OpenDatabaseResult {
     "ok": boolean;
     "error": string;
+    "canonicalPath": string;
+    "alreadyOpen": boolean;
 
     /** Creates a new OpenDatabaseResult instance. */
     constructor($$source: Partial<OpenDatabaseResult> = {}) {
@@ -19,6 +21,12 @@ export class OpenDatabaseResult {
         }
         if (!("error" in $$source)) {
             this["error"] = "";
+        }
+        if (!("canonicalPath" in $$source)) {
+            this["canonicalPath"] = "";
+        }
+        if (!("alreadyOpen" in $$source)) {
+            this["alreadyOpen"] = false;
         }
 
         Object.assign(this, $$source);

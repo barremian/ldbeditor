@@ -1440,7 +1440,7 @@
               </h2>
               <div class="space-y-2">
                 {#each recentPaths as item}
-                  <div class="relative">
+                  <div class="group relative">
                     <Button
                       variant="ghost"
                       class="w-full justify-start pr-10 font-normal"
@@ -1452,7 +1452,7 @@
                     <Button
                       variant="ghost"
                       size="icon"
-                      class="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                      class="absolute right-1 top-1 h-7 w-7 opacity-0 transition-opacity pointer-events-none text-muted-foreground hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
                       aria-label={`Remove ${item.label} from recently opened`}
                       title="Remove from recently opened"
                       on:click={(event) => {

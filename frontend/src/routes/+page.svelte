@@ -472,6 +472,11 @@
     saveRecentPaths(paths);
   }
 
+  function removeFromRecent(path: string) {
+    const paths = recentPaths.filter((p) => p.path !== path);
+    saveRecentPaths(paths);
+  }
+
   async function openDatabaseFromPath(path: string) {
     if (!path || path.trim() === "") return;
 
@@ -1435,14 +1440,30 @@
               </h2>
               <div class="space-y-2">
                 {#each recentPaths as item}
-                  <Button
-                    variant="ghost"
-                    class="w-full justify-start font-normal"
-                    on:click={() => openDatabaseFromPath(item.path)}
-                    disabled={loading}
-                  >
-                    {item.label}
-                  </Button>
+                  <div class="relative">
+                    <Button
+                      variant="ghost"
+                      class="w-full justify-start pr-10 font-normal"
+                      on:click={() => openDatabaseFromPath(item.path)}
+                      disabled={loading}
+                    >
+                      {item.label}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove ${item.label} from recently opened`}
+                      title="Remove from recently opened"
+                      on:click={(event) => {
+                        event.stopPropagation();
+                        removeFromRecent(item.path);
+                      }}
+                      disabled={loading}
+                    >
+                      <X class="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 {/each}
               </div>
             </section>

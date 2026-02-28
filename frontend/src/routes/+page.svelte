@@ -1139,8 +1139,8 @@
           <div bind:this={viewMenuContainer} class="relative">
             <Button
               variant="outline"
-              size="sm"
-              class="gap-1.5"
+              size="icon"
+              class="h-8 w-8"
               title="View and safety settings"
               aria-label="View and safety settings"
               aria-haspopup="menu"
@@ -1151,7 +1151,6 @@
               }}
             >
               <MoreHorizontal class="h-3.5 w-3.5" />
-              <span class="hidden sm:inline">View</span>
             </Button>
 
             {#if isViewMenuOpen}
@@ -1168,14 +1167,22 @@
                   role="menuitemcheckbox"
                   aria-checked={dbLocked}
                   on:click={() => {
-                    isViewMenuOpen = false;
                     void toggleDatabaseLock();
                   }}
                 >
                   <span>Read-only</span>
-                  {#if dbLocked}
-                    <Check class="h-3.5 w-3.5" />
-                  {/if}
+                  <span
+                    class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+                      dbLocked ? "border-primary/40 bg-primary" : "border-border bg-muted"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+                        dbLocked ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    ></span>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1185,14 +1192,24 @@
                   role="menuitemcheckbox"
                   aria-checked={prettyPrintJson}
                   on:click={() => {
-                    isViewMenuOpen = false;
                     togglePrettyPrintJson();
                   }}
                 >
                   <span>Pretty JSON</span>
-                  {#if prettyPrintJson}
-                    <Check class="h-3.5 w-3.5" />
-                  {/if}
+                  <span
+                    class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+                      prettyPrintJson
+                        ? "border-primary/40 bg-primary"
+                        : "border-border bg-muted"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+                        prettyPrintJson ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    ></span>
+                  </span>
                 </button>
               </div>
             {/if}

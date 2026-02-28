@@ -870,7 +870,7 @@
                           title={key}
                           on:click={() => selectKey(key)}
                         >
-                          <span class="max-w-full truncate">{key}</span>
+                          <span class="block w-full truncate">{key}</span>
                         </button>
                         <div
                           class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"

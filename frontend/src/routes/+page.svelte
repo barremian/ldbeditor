@@ -28,6 +28,8 @@
   const MIN_KEY_PANE_WIDTH = 240;
   const MIN_VALUE_PANE_WIDTH = 320;
   const GRID_GAP_PX = 16;
+  const SPLIT_CONTAINER_PADDING_PX = 16;
+  const SPLIT_CONTAINER_HORIZONTAL_INSET_PX = SPLIT_CONTAINER_PADDING_PX * 2;
 
   // Startup view state
   let recentPaths: { path: string; label: string }[] = [];
@@ -51,13 +53,18 @@
     return editorSplitContainer?.clientWidth ?? window.innerWidth;
   }
 
+  function getSplitContentWidth(containerWidth: number) {
+    return Math.max(0, containerWidth - SPLIT_CONTAINER_HORIZONTAL_INSET_PX);
+  }
+
   function clampKeyPaneWidth(
     width: number,
     containerWidth: number = getContainerWidth(),
   ) {
+    const contentWidth = getSplitContentWidth(containerWidth);
     const maxKeyWidth = Math.max(
       MIN_KEY_PANE_WIDTH,
-      containerWidth - MIN_VALUE_PANE_WIDTH - GRID_GAP_PX,
+      contentWidth - MIN_VALUE_PANE_WIDTH - GRID_GAP_PX,
     );
 
     return Math.min(Math.max(width, MIN_KEY_PANE_WIDTH), maxKeyWidth);
@@ -123,7 +130,11 @@
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (!editorSplitContainer) return;
       const containerRect = editorSplitContainer.getBoundingClientRect();
-      const nextWidth = moveEvent.clientX - containerRect.left - GRID_GAP_PX / 2;
+      const nextWidth =
+        moveEvent.clientX -
+        containerRect.left -
+        SPLIT_CONTAINER_PADDING_PX -
+        GRID_GAP_PX / 2;
       keyPaneWidth = clampKeyPaneWidth(nextWidth, containerRect.width);
     };
 
@@ -354,7 +365,7 @@
           class={`absolute bottom-4 top-4 z-10 w-3 -translate-x-1/2 cursor-col-resize rounded-full transition-colors ${
             isResizingPane ? "bg-primary/20" : "hover:bg-muted"
           }`}
-          style={`left: ${keyPaneWidth + GRID_GAP_PX / 2}px;`}
+          style={`left: ${SPLIT_CONTAINER_PADDING_PX + keyPaneWidth + GRID_GAP_PX / 2}px;`}
           aria-label="Resize key and value panes"
           on:pointerdown={startPaneResize}
         >

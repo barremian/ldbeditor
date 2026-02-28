@@ -719,7 +719,7 @@
         <CardContent class="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
           <div class="relative w-full">
             <input
-              class="w-full rounded-md border border-input bg-background px-2 py-1.5 pr-8 text-sm"
+              class="w-full rounded-md border border-input bg-background px-2 py-1.5 pr-8 text-sm transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
               placeholder="Search keys..."
               bind:value={keySearchInput}
             />
@@ -969,9 +969,9 @@
             </div>
           {:else}
             <textarea
-              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors ${
+              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
                 isValueEditing
-                  ? "bg-background text-foreground"
+                  ? "bg-background text-foreground focus-visible:border-primary"
                   : "bg-muted/50 text-foreground"
               }`}
               bind:value={editorValue}

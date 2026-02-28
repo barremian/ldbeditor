@@ -32,3 +32,39 @@ export class OpenDatabaseResult {
         return new OpenDatabaseResult($$parsedSource as Partial<OpenDatabaseResult>);
     }
 }
+
+/**
+ * PutValueIfUnchangedResult is the result of a guarded value write.
+ */
+export class PutValueIfUnchangedResult {
+    "ok": boolean;
+    "conflict": boolean;
+    "currentValue": string;
+    "currentValueExists": boolean;
+
+    /** Creates a new PutValueIfUnchangedResult instance. */
+    constructor($$source: Partial<PutValueIfUnchangedResult> = {}) {
+        if (!("ok" in $$source)) {
+            this["ok"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("currentValue" in $$source)) {
+            this["currentValue"] = "";
+        }
+        if (!("currentValueExists" in $$source)) {
+            this["currentValueExists"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PutValueIfUnchangedResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PutValueIfUnchangedResult {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PutValueIfUnchangedResult($$parsedSource as Partial<PutValueIfUnchangedResult>);
+    }
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -25,6 +26,14 @@ var errDatabaseLocked = errors.New("database is locked")
 type OpenDatabaseResult struct {
 	Ok    bool   `json:"ok"`
 	Error string `json:"error"`
+}
+
+// PutValueIfUnchangedResult is the result of a guarded value write.
+type PutValueIfUnchangedResult struct {
+	Ok                 bool   `json:"ok"`
+	Conflict           bool   `json:"conflict"`
+	CurrentValue       string `json:"currentValue"`
+	CurrentValueExists bool   `json:"currentValueExists"`
 }
 
 // OpenDatabase opens a LevelDB database at the given path.
@@ -121,6 +130,61 @@ func (s *LevelDBService) PutValue(keyDisplay string, valueDisplay string) error 
 	}
 
 	return db.Put(key, value, nil)
+}
+
+// PutValueIfUnchanged updates a key only if its current value matches expectedValueDisplay.
+// Set force=true to overwrite regardless of current database value.
+func (s *LevelDBService) PutValueIfUnchanged(keyDisplay string, expectedValueDisplay string, newValueDisplay string, force bool) (PutValueIfUnchangedResult, error) {
+	db, err := s.writableDatabase()
+	if err != nil {
+		return PutValueIfUnchangedResult{}, err
+	}
+
+	key, err := displayStringToBytes(keyDisplay)
+	if err != nil {
+		return PutValueIfUnchangedResult{}, fmt.Errorf("invalid key: %w", err)
+	}
+
+	expectedValue, err := displayStringToBytes(expectedValueDisplay)
+	if err != nil {
+		return PutValueIfUnchangedResult{}, fmt.Errorf("invalid expected value: %w", err)
+	}
+
+	newValue, err := displayStringToBytes(newValueDisplay)
+	if err != nil {
+		return PutValueIfUnchangedResult{}, fmt.Errorf("invalid value: %w", err)
+	}
+
+	if !force {
+		currentValue, getErr := db.Get(key, nil)
+		if getErr != nil {
+			if errors.Is(getErr, leveldb.ErrNotFound) {
+				return PutValueIfUnchangedResult{
+					Ok:                 false,
+					Conflict:           true,
+					CurrentValueExists: false,
+				}, nil
+			}
+			return PutValueIfUnchangedResult{}, getErr
+		}
+		if !bytes.Equal(currentValue, expectedValue) {
+			return PutValueIfUnchangedResult{
+				Ok:                 false,
+				Conflict:           true,
+				CurrentValue:       bytesToDisplayString(currentValue),
+				CurrentValueExists: true,
+			}, nil
+		}
+	}
+
+	if err := db.Put(key, newValue, nil); err != nil {
+		return PutValueIfUnchangedResult{}, err
+	}
+
+	return PutValueIfUnchangedResult{
+		Ok:       true,
+		Conflict: false,
+	}, nil
 }
 
 // DeleteKey deletes the given key.

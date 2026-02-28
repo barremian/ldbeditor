@@ -9,5 +9,6 @@ export {
 };
 
 export {
-    OpenDatabaseResult
+    OpenDatabaseResult,
+    PutValueIfUnchangedResult
 } from "./models.js";

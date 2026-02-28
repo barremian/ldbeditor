@@ -68,6 +68,16 @@ export function PutValue(keyDisplay: string, valueDisplay: string): $Cancellable
 }
 
 /**
+ * PutValueIfUnchanged updates a key only if its current value matches expectedValueDisplay.
+ * Set force=true to overwrite regardless of current database value.
+ */
+export function PutValueIfUnchanged(keyDisplay: string, expectedValueDisplay: string, newValueDisplay: string, force: boolean): $CancellablePromise<$models.PutValueIfUnchangedResult> {
+    return $Call.ByID(1648540501, keyDisplay, expectedValueDisplay, newValueDisplay, force).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
+/**
  * RenameKey renames a key while preserving its value.
  * oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
  */
@@ -85,3 +95,4 @@ export function SetDatabaseLocked(locked: boolean): $CancellablePromise<void> {
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = $models.OpenDatabaseResult.createFrom;
+const $$createType2 = $models.PutValueIfUnchangedResult.createFrom;

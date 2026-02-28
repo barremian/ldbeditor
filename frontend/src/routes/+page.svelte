@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
   import { Dialogs, Window } from "@wailsio/runtime";
-  import { LevelDBService, OpenDatabaseResult } from "../../bindings/ldbeditor";
+  import * as LevelDBService from "../../bindings/ldbeditor/leveldbservice";
+  import { OpenDatabaseResult } from "../../bindings/ldbeditor/models";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -705,6 +706,32 @@
     isValueEditing = true;
   }
 
+  async function acceptRemoteConflictValue(
+    key: string,
+    currentValueExists: boolean,
+    currentValue: string,
+  ) {
+    if (currentValueExists) {
+      originalValueRaw = currentValue;
+      editorValueRaw = currentValue;
+      syncEditorDisplayWithRawValue();
+      isValueEditing = false;
+      return;
+    }
+
+    await loadKeys();
+    if (!keys.includes(key)) {
+      selectedKey = null;
+      originalValueRaw = "";
+      editorValueRaw = "";
+      editorValue = "";
+      isValueEditing = false;
+      return;
+    }
+
+    await fetchValueForSelectedKey(key);
+  }
+
   async function saveValue() {
     if (
       !selectedKey ||
@@ -717,10 +744,54 @@
       return;
     }
 
+    const keyToSave = selectedKey;
+    const expectedValueRaw = originalValueRaw;
+    const localValueRaw = editorValueRaw;
+
     isSaving = true;
     try {
-      await LevelDBService.PutValue(selectedKey, editorValueRaw);
-      originalValueRaw = editorValueRaw;
+      const saveResult = await LevelDBService.PutValueIfUnchanged(
+        keyToSave,
+        expectedValueRaw,
+        localValueRaw,
+        false,
+      );
+
+      if (saveResult.conflict) {
+        const overwriteLocalChanges = window.confirm(
+          "This value was changed by another application after you started editing.\n\n" +
+            "Press OK to overwrite with your local changes, or Cancel to accept the remote value and discard your local edits.",
+        );
+
+        if (overwriteLocalChanges) {
+          const overwriteResult = await LevelDBService.PutValueIfUnchanged(
+            keyToSave,
+            expectedValueRaw,
+            localValueRaw,
+            true,
+          );
+          if (!overwriteResult.ok) {
+            throw new Error("Failed to overwrite value.");
+          }
+          originalValueRaw = localValueRaw;
+          syncEditorDisplayWithRawValue();
+          isValueEditing = false;
+          return;
+        }
+
+        await acceptRemoteConflictValue(
+          keyToSave,
+          saveResult.currentValueExists,
+          saveResult.currentValue,
+        );
+        return;
+      }
+
+      if (!saveResult.ok) {
+        throw new Error("Save failed.");
+      }
+
+      originalValueRaw = localValueRaw;
       syncEditorDisplayWithRawValue();
       isValueEditing = false;
     } catch (err) {

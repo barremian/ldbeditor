@@ -808,7 +808,7 @@
                       {#if editingKey === key}
                         <div class="min-w-0 flex-1">
                           <input
-                            class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                            class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
                             bind:value={renameInput}
                             disabled={isRenaming}
                             on:click|stopPropagation

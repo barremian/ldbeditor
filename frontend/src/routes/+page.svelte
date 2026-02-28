@@ -29,6 +29,7 @@
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
+  const KEY_SEARCH_DEBOUNCE_MS = 300;
   const DEFAULT_KEY_PANE_WIDTH = 320;
   const MIN_KEY_PANE_WIDTH = 300;
   const MIN_VALUE_PANE_WIDTH = 320;
@@ -44,6 +45,7 @@
   // Editor view state
   let dbPath = "";
   let keys: string[] = [];
+  let filteredKeys: string[] = [];
   let selectedKey: string | null = null;
   let originalValue = "";
   let editorValue = "";
@@ -70,6 +72,9 @@
   let createKeyValidationError = "";
   let createValueValidationError = "";
   let renameValidationError = "";
+  let keySearchInput = "";
+  let debouncedKeySearch = "";
+  let keySearchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
@@ -88,6 +93,28 @@
   $: createKeyValidationError = getHexValidationError(newKeyInput, "New key");
   $: createValueValidationError = getHexValidationError(newValueInput, "New value");
   $: renameValidationError = getHexValidationError(renameInput, "New key");
+  $: filteredKeys = debouncedKeySearch
+    ? keys.filter((key) => key.toLowerCase().includes(debouncedKeySearch))
+    : keys;
+  $: scheduleDebouncedKeySearch(keySearchInput);
+
+  function scheduleDebouncedKeySearch(value: string) {
+    if (keySearchDebounceTimeout) {
+      clearTimeout(keySearchDebounceTimeout);
+    }
+    keySearchDebounceTimeout = setTimeout(() => {
+      debouncedKeySearch = value.trim().toLowerCase();
+    }, KEY_SEARCH_DEBOUNCE_MS);
+  }
+
+  function clearKeySearch() {
+    keySearchInput = "";
+    debouncedKeySearch = "";
+    if (keySearchDebounceTimeout) {
+      clearTimeout(keySearchDebounceTimeout);
+      keySearchDebounceTimeout = null;
+    }
+  }
 
   function clearSelection() {
     selectedKey = null;
@@ -496,6 +523,13 @@
     }
     dbPath = "";
     keys = [];
+    filteredKeys = [];
+    keySearchInput = "";
+    debouncedKeySearch = "";
+    if (keySearchDebounceTimeout) {
+      clearTimeout(keySearchDebounceTimeout);
+      keySearchDebounceTimeout = null;
+    }
     clearSelection();
     resetCreateForm();
     resetRenameForm();
@@ -585,6 +619,9 @@
 
   onDestroy(() => {
     stopPaneResize();
+    if (keySearchDebounceTimeout) {
+      clearTimeout(keySearchDebounceTimeout);
+    }
   });
 
   // Init
@@ -671,9 +708,33 @@
               </Button>
             </div>
           </div>
-          <CardDescription>{keys.length} entries</CardDescription>
+          <CardDescription>
+            {#if keySearchInput.trim()}
+              {filteredKeys.length} of {keys.length} entries
+            {:else}
+              {keys.length} entries
+            {/if}
+          </CardDescription>
         </CardHeader>
         <CardContent class="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
+          <div class="relative w-full">
+            <input
+              class="w-full rounded-md border border-input bg-background px-2 py-1.5 pr-8 text-sm"
+              placeholder="Search keys..."
+              bind:value={keySearchInput}
+            />
+            {#if keySearchInput.length > 0}
+              <button
+                type="button"
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+                on:click={clearKeySearch}
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            {/if}
+          </div>
+
           {#if showCreateForm}
             <div class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2">
               <input
@@ -728,10 +789,14 @@
             <div class="px-2 py-3 text-sm text-muted-foreground">
               No keys yet. Use <strong>New</strong> to create your first key.
             </div>
+          {:else if filteredKeys.length === 0}
+            <div class="px-2 py-3 text-sm text-muted-foreground">
+              No keys match "{keySearchInput.trim()}".
+            </div>
           {:else}
             <ScrollArea class="h-full min-h-0 rounded-md border border-border/70">
               <ul class="space-y-1 p-2">
-                {#each keys as key}
+                {#each filteredKeys as key}
                   <li class="group">
                     <div
                       class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${

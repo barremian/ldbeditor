@@ -672,16 +672,16 @@
       {#if isDesktopLayout}
         <button
           type="button"
-          class={`absolute bottom-4 top-4 z-10 w-3 -translate-x-1/2 cursor-col-resize rounded-full transition-colors ${
-            isResizingPane ? "bg-primary/20" : "hover:bg-muted"
-          }`}
+          class="group absolute bottom-4 top-4 z-10 w-2 -translate-x-1/2 cursor-col-resize rounded-full bg-transparent"
           style={`left: ${SPLIT_CONTAINER_PADDING_PX + keyPaneWidth + GRID_GAP_PX / 2}px;`}
           aria-label="Resize key and value panes"
           on:pointerdown={startPaneResize}
         >
           <span
-            class={`mx-auto block h-full w-px ${
-              isResizingPane ? "bg-primary/70" : "bg-border/70"
+            class={`mx-auto block h-full rounded-full transition-all ${
+              isResizingPane
+                ? "w-0.5 bg-primary/55"
+                : "w-px bg-border/55 group-hover:bg-border/75"
             }`}
           ></span>
         </button>

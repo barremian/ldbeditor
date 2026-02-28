@@ -20,6 +20,7 @@
     FolderOpen,
     History,
     KeyRound,
+    MoreHorizontal,
     Pencil,
     Plus,
     RefreshCcw,
@@ -97,6 +98,8 @@
   let countdownNow = Date.now();
   let isRefreshMenuOpen = false;
   let refreshMenuContainer: HTMLDivElement | null = null;
+  let isViewMenuOpen = false;
+  let viewMenuContainer: HTMLDivElement | null = null;
   let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
@@ -883,6 +886,8 @@
     resetRenameForm();
     keyPendingDelete = null;
     isValueEditing = false;
+    isRefreshMenuOpen = false;
+    isViewMenuOpen = false;
   }
 
   async function handleTitlebarDoubleClick() {
@@ -921,8 +926,9 @@
     window.addEventListener("resize", onWindowResize);
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isRefreshMenuOpen) {
+      if (event.key === "Escape" && (isRefreshMenuOpen || isViewMenuOpen)) {
         isRefreshMenuOpen = false;
+        isViewMenuOpen = false;
         return;
       }
 
@@ -962,11 +968,19 @@
     };
 
     const onPointerDown = (event: PointerEvent) => {
-      if (!isRefreshMenuOpen || !refreshMenuContainer) return;
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (!refreshMenuContainer.contains(target)) {
+
+      if (
+        isRefreshMenuOpen &&
+        refreshMenuContainer &&
+        !refreshMenuContainer.contains(target)
+      ) {
         isRefreshMenuOpen = false;
+      }
+
+      if (isViewMenuOpen && viewMenuContainer && !viewMenuContainer.contains(target)) {
+        isViewMenuOpen = false;
       }
     };
 
@@ -1003,109 +1017,186 @@
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
     <header
-      class="relative z-40 flex items-center justify-between gap-3 overflow-visible border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
+      class="relative z-40 overflow-visible border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
     >
-      <Button
-        variant="outline"
-        size="sm"
-        class="gap-2"
-        on:click={closeDatabase}
-      >
-        <X class="h-4 w-4" />
-        Close database
-      </Button>
-      <div class="flex items-center gap-2">
-        <Badge variant="secondary" class="max-w-[50vw] truncate" title={dbPath}>
-          <Database class="mr-1.5 h-3.5 w-3.5" />
-          {dbPath.split(/[/\\]/).pop() || dbPath}
-        </Badge>
-
-        <div bind:this={refreshMenuContainer} class="relative flex items-stretch">
-          <Button
-            variant="outline"
-            size="sm"
-            class="gap-1.5 rounded-r-none border-r-0 pr-2"
-            title={getRefreshButtonTitle()}
-            disabled={isRefreshing}
-            on:click={triggerManualRefresh}
-          >
-            {#if isRefreshing}
-              <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
-            {:else if autoRefreshIntervalMs > 0}
-              <svg
-                class="h-3.5 w-3.5 -rotate-90"
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="8"
-                  cy="8"
-                  r={REFRESH_RING_RADIUS}
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  class="opacity-20"
-                />
-                <circle
-                  cx="8"
-                  cy="8"
-                  r={REFRESH_RING_RADIUS}
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-dasharray={`${REFRESH_RING_CIRCUMFERENCE} ${REFRESH_RING_CIRCUMFERENCE}`}
-                  stroke-dashoffset={`${REFRESH_RING_CIRCUMFERENCE * (1 - autoRefreshProgress)}`}
-                />
-              </svg>
-            {:else}
-              <RefreshCcw class="h-3.5 w-3.5" />
+      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div class="flex min-w-0 items-center justify-between gap-2 md:flex-1">
+          <div class="flex min-w-0 items-center gap-2">
+            <Badge variant="secondary" class="max-w-[70vw] truncate md:max-w-[40vw]" title={dbPath}>
+              <Database class="mr-1.5 h-3.5 w-3.5" />
+              {dbPath.split(/[/\\]/).pop() || dbPath}
+            </Badge>
+            {#if dbLocked}
+              <Badge variant="outline">Read-only</Badge>
             {/if}
-            {isRefreshing ? "Refreshing…" : "Refresh"}
-          </Button>
+            {#if autoRefreshIntervalMs > 0}
+              <Badge variant="outline">Auto {autoRefreshLabel}</Badge>
+            {/if}
+          </div>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            class="w-8 rounded-l-none px-0"
-            aria-label="Auto-refresh options"
-            aria-haspopup="menu"
-            aria-expanded={isRefreshMenuOpen}
-            disabled={isRefreshing}
-            on:click={() => {
-              if (isRefreshing) return;
-              isRefreshMenuOpen = !isRefreshMenuOpen;
-            }}
+            class="gap-2 px-2 sm:px-3"
+            title="Close database"
+            on:click={closeDatabase}
           >
-            <ChevronDown class="h-3.5 w-3.5" />
+            <X class="h-4 w-4" />
+            <span class="hidden sm:inline">Close database</span>
+            <span class="sr-only sm:hidden">Close database</span>
           </Button>
+        </div>
 
-          {#if isRefreshMenuOpen}
-            <div
-              class={`absolute right-0 top-10 z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md ${
-                isRefreshing ? "pointer-events-none opacity-70" : ""
-              }`}
-              role="menu"
-              aria-label="Auto-refresh interval options"
+        <div class="flex items-center justify-between gap-2 md:shrink-0 md:justify-end">
+          <div bind:this={refreshMenuContainer} class="relative flex items-stretch">
+            <Button
+              variant="outline"
+              size="sm"
+              class="gap-1.5 rounded-r-none border-r-0 pr-2"
+              title={getRefreshButtonTitle()}
+              disabled={isRefreshing}
+              on:click={triggerManualRefresh}
             >
-              {#each AUTO_REFRESH_OPTIONS as option}
+              {#if isRefreshing}
+                <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
+              {:else if autoRefreshIntervalMs > 0}
+                <svg
+                  class="h-3.5 w-3.5 -rotate-90"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r={REFRESH_RING_RADIUS}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="opacity-20"
+                  />
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r={REFRESH_RING_RADIUS}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-dasharray={`${REFRESH_RING_CIRCUMFERENCE} ${REFRESH_RING_CIRCUMFERENCE}`}
+                    stroke-dashoffset={`${REFRESH_RING_CIRCUMFERENCE * (1 - autoRefreshProgress)}`}
+                  />
+                </svg>
+              {:else}
+                <RefreshCcw class="h-3.5 w-3.5" />
+              {/if}
+              {isRefreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              class="w-8 rounded-l-none px-0"
+              aria-label="Auto-refresh options"
+              aria-haspopup="menu"
+              aria-expanded={isRefreshMenuOpen}
+              disabled={isRefreshing}
+              on:click={() => {
+                if (isRefreshing) return;
+                isViewMenuOpen = false;
+                isRefreshMenuOpen = !isRefreshMenuOpen;
+              }}
+            >
+              <ChevronDown class="h-3.5 w-3.5" />
+            </Button>
+
+            {#if isRefreshMenuOpen}
+              <div
+                class={`absolute right-0 top-10 z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md ${
+                  isRefreshing ? "pointer-events-none opacity-70" : ""
+                }`}
+                role="menu"
+                aria-label="Auto-refresh interval options"
+              >
+                {#each AUTO_REFRESH_OPTIONS as option}
+                  <button
+                    type="button"
+                    class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
+                      option.intervalMs === autoRefreshIntervalMs ? "bg-muted/80" : ""
+                    }`}
+                    role="menuitemradio"
+                    aria-checked={option.intervalMs === autoRefreshIntervalMs}
+                    disabled={isRefreshing}
+                    on:click={() => setAutoRefreshInterval(option.intervalMs)}
+                  >
+                    <span>{option.label}</span>
+                    {#if option.intervalMs === autoRefreshIntervalMs}
+                      <Check class="h-3.5 w-3.5" />
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div bind:this={viewMenuContainer} class="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              class="gap-1.5"
+              title="View and safety settings"
+              aria-label="View and safety settings"
+              aria-haspopup="menu"
+              aria-expanded={isViewMenuOpen}
+              on:click={() => {
+                isRefreshMenuOpen = false;
+                isViewMenuOpen = !isViewMenuOpen;
+              }}
+            >
+              <MoreHorizontal class="h-3.5 w-3.5" />
+              <span class="hidden sm:inline">View</span>
+            </Button>
+
+            {#if isViewMenuOpen}
+              <div
+                class="absolute right-0 top-10 z-50 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+                role="menu"
+                aria-label="View and safety settings"
+              >
                 <button
                   type="button"
                   class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                    option.intervalMs === autoRefreshIntervalMs ? "bg-muted/80" : ""
+                    dbLocked ? "bg-muted/80" : ""
                   }`}
-                  role="menuitemradio"
-                  aria-checked={option.intervalMs === autoRefreshIntervalMs}
-                  disabled={isRefreshing}
-                  on:click={() => setAutoRefreshInterval(option.intervalMs)}
+                  role="menuitemcheckbox"
+                  aria-checked={dbLocked}
+                  on:click={() => {
+                    isViewMenuOpen = false;
+                    void toggleDatabaseLock();
+                  }}
                 >
-                  <span>{option.label}</span>
-                  {#if option.intervalMs === autoRefreshIntervalMs}
+                  <span>Read-only</span>
+                  {#if dbLocked}
                     <Check class="h-3.5 w-3.5" />
                   {/if}
                 </button>
-              {/each}
-            </div>
-          {/if}
+                <button
+                  type="button"
+                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
+                    prettyPrintJson ? "bg-muted/80" : ""
+                  }`}
+                  role="menuitemcheckbox"
+                  aria-checked={prettyPrintJson}
+                  on:click={() => {
+                    isViewMenuOpen = false;
+                    togglePrettyPrintJson();
+                  }}
+                >
+                  <span>Pretty JSON</span>
+                  {#if prettyPrintJson}
+                    <Check class="h-3.5 w-3.5" />
+                  {/if}
+                </button>
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     </header>
@@ -1381,31 +1472,6 @@
               {#if isDirty}
                 <Badge variant="secondary">Unsaved</Badge>
               {/if}
-              {#if dbLocked}
-                <Badge variant="outline">Read-only</Badge>
-              {/if}
-              <Button
-                variant={dbLocked ? "default" : "outline"}
-                size="sm"
-                class="gap-1.5"
-                disabled={!dbPath}
-                title="Toggle read-only mode for this database"
-                aria-pressed={dbLocked}
-                on:click={toggleDatabaseLock}
-              >
-                Database lock: {dbLocked ? "On" : "Off"}
-              </Button>
-              <Button
-                variant={prettyPrintJson ? "default" : "outline"}
-                size="sm"
-                class="gap-1.5"
-                disabled={!dbPath}
-                title="Toggle JSON pretty print for this database"
-                aria-pressed={prettyPrintJson}
-                on:click={togglePrettyPrintJson}
-              >
-                Pretty JSON: {prettyPrintJson ? "On" : "Off"}
-              </Button>
               {#if isValueEditing}
                 <Button
                   size="sm"

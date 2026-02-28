@@ -7,6 +7,8 @@
     orientation?: "vertical" | "horizontal" | "both";
     scrollbarXClasses?: string;
     scrollbarYClasses?: string;
+    contentClass?: string;
+    contentStyle?: string;
   };
 
   let className: $$Props["class"] = undefined;
@@ -14,6 +16,8 @@
   export let orientation = "vertical";
   export let scrollbarXClasses: string = "";
   export let scrollbarYClasses: string = "";
+  export let contentClass: string = "";
+  export let contentStyle: string = "display: block; width: 100%; min-width: 100%;";
 </script>
 
 <ScrollAreaPrimitive.Root
@@ -21,8 +25,15 @@
   class={cn("relative overflow-hidden", className)}
 >
   <ScrollAreaPrimitive.Viewport class="h-full w-full rounded-[inherit]">
-    <ScrollAreaPrimitive.Content>
-      <slot />
+    <ScrollAreaPrimitive.Content asChild let:builder>
+      <div
+        {...builder}
+        use:builder.action
+        class={cn("block w-full min-w-full", contentClass)}
+        style={contentStyle}
+      >
+        <slot />
+      </div>
     </ScrollAreaPrimitive.Content>
   </ScrollAreaPrimitive.Viewport>
   {#if orientation === "vertical" || orientation === "both"}

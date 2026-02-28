@@ -801,10 +801,13 @@
               No keys match "{keySearchInput.trim()}".
             </div>
           {:else}
-            <ScrollArea class="h-full min-h-0 rounded-md border border-border/70">
-              <ul class="space-y-1 p-2">
+            <ScrollArea
+              class="h-full min-h-0 rounded-md border border-border/70"
+              contentStyle="display: block; width: 100%; min-width: 100%;"
+            >
+              <ul class="w-full space-y-1 p-2">
                 {#each filteredKeys as key}
-                  <li class="group">
+                  <li class="group w-full">
                     <div
                       class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
                         selectedKey === key
@@ -863,10 +866,11 @@
                         </div>
                       {:else}
                         <button
-                          class="min-w-0 flex-1 truncate text-left"
+                          class="min-w-0 flex-1 text-left"
+                          title={key}
                           on:click={() => selectKey(key)}
                         >
-                          {key.length > 80 ? key.slice(0, 80) + "…" : key}
+                          <span class="max-w-full truncate">{key}</span>
                         </button>
                         <div
                           class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"

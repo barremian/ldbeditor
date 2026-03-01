@@ -1205,7 +1205,7 @@
           <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
-                class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
+                class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
                   activeTabId === tab.id
                     ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
@@ -1218,15 +1218,17 @@
               >
                 <TabsTrigger
                   value={tab.id}
-                  class="max-w-[220px] truncate rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  class="min-w-0 max-w-[220px] flex-1 rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
                   title={tab.type === "database" ? tab.path : tab.title}
                 >
-                  {tab.type === "database" ? tab.title : "Dashboard"}
+                  <span class="block truncate">
+                    {tab.type === "database" ? tab.title : "Dashboard"}
+                  </span>
                 </TabsTrigger>
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                   title={`Close ${tab.title}`}
                   on:click={(event) => {
                     event.stopPropagation();
@@ -1814,7 +1816,7 @@
           <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
-                class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
+                class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
                   activeTabId === tab.id
                     ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
@@ -1827,15 +1829,17 @@
               >
                 <TabsTrigger
                   value={tab.id}
-                  class="max-w-[220px] truncate rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  class="min-w-0 max-w-[220px] flex-1 rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
                   title={tab.type === "database" ? tab.path : tab.title}
                 >
-                  {tab.type === "database" ? tab.title : "Dashboard"}
+                  <span class="block truncate">
+                    {tab.type === "database" ? tab.title : "Dashboard"}
+                  </span>
                 </TabsTrigger>
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                   title={`Close ${tab.title}`}
                   on:click={(event) => {
                     event.stopPropagation();

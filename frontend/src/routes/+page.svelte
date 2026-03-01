@@ -62,7 +62,9 @@
     | { id: string; type: "dashboard"; title: string }
     | { id: string; type: "database"; title: string; path: string };
   let nextTabId = 2;
-  let tabs: WorkspaceTab[] = [{ id: "tab-1", type: "dashboard", title: "Dashboard" }];
+  let tabs: WorkspaceTab[] = [
+    { id: "tab-1", type: "dashboard", title: "Dashboard" },
+  ];
   let activeTabId = tabs[0].id;
 
   // Editor view state
@@ -118,6 +120,26 @@
     { prettyPrintJson: boolean; dbLocked: boolean }
   > = {};
 
+  type TabViewState = { selectedKey: string | null };
+  let tabStateMap: Record<string, TabViewState> = {};
+  let keyListViewportEl: HTMLDivElement | undefined = undefined;
+
+  function getSelectedKeyRowElement(viewportEl: HTMLDivElement) {
+    return viewportEl.querySelector<HTMLElement>(
+      '[data-key-item-selected="true"]'
+    );
+  }
+
+  function restoreKeyListScrollForSelectedKey() {
+    const viewportEl = keyListViewportEl;
+    if (!viewportEl || !selectedKey) return;
+
+    const selectedRowEl = getSelectedKeyRowElement(viewportEl);
+    if (!selectedRowEl) return;
+
+    selectedRowEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   function getHexValidationError(display: string, label: string): string {
     if (!display.startsWith("0x")) return "";
     const raw = display.slice(2);
@@ -133,7 +155,10 @@
   $: isDirty = selectedKey !== null && editorValueRaw !== originalValueRaw;
   $: valueValidationError = getHexValidationError(editorValueRaw, "Value");
   $: createKeyValidationError = getHexValidationError(newKeyInput, "New key");
-  $: createValueValidationError = getHexValidationError(newValueInput, "New value");
+  $: createValueValidationError = getHexValidationError(
+    newValueInput,
+    "New value"
+  );
   $: renameValidationError = getHexValidationError(renameInput, "New key");
   $: filteredKeys = debouncedKeySearch
     ? keys.filter((key) => key.toLowerCase().includes(debouncedKeySearch))
@@ -175,7 +200,10 @@
     isValueEditing = false;
   }
 
-  function tryFormatJson(value: string): { formatted: string; isJson: boolean } {
+  function tryFormatJson(value: string): {
+    formatted: string;
+    isJson: boolean;
+  } {
     try {
       const parsed = JSON.parse(value);
       return { formatted: JSON.stringify(parsed, null, 2), isJson: true };
@@ -215,7 +243,7 @@
           };
           return acc;
         },
-        {} as Record<string, { prettyPrintJson: boolean; dbLocked: boolean }>,
+        {} as Record<string, { prettyPrintJson: boolean; dbLocked: boolean }>
       );
     } catch {
       valueFormatPrefsByDatabase = {};
@@ -226,7 +254,7 @@
     try {
       localStorage.setItem(
         VALUE_FORMAT_PREFS_STORAGE_KEY,
-        JSON.stringify(valueFormatPrefsByDatabase),
+        JSON.stringify(valueFormatPrefsByDatabase)
       );
     } catch {
       // ignore localStorage failures
@@ -386,7 +414,7 @@
   async function confirmDiscardUnsavedChanges() {
     if (!isDirty) return true;
     return window.confirm(
-      "You have unsaved value edits. Discard these changes?",
+      "You have unsaved value edits. Discard these changes?"
     );
   }
 
@@ -411,12 +439,12 @@
 
   function clampKeyPaneWidth(
     width: number,
-    containerWidth: number = getContainerWidth(),
+    containerWidth: number = getContainerWidth()
   ) {
     const contentWidth = getSplitContentWidth(containerWidth);
     const maxKeyWidth = Math.max(
       MIN_KEY_PANE_WIDTH,
-      contentWidth - MIN_VALUE_PANE_WIDTH - GRID_GAP_PX,
+      contentWidth - MIN_VALUE_PANE_WIDTH - GRID_GAP_PX
     );
 
     return Math.min(Math.max(width, MIN_KEY_PANE_WIDTH), maxKeyWidth);
@@ -446,7 +474,7 @@
     try {
       localStorage.setItem(
         KEY_PANE_WIDTH_STORAGE_KEY,
-        String(Math.round(keyPaneWidth)),
+        String(Math.round(keyPaneWidth))
       );
     } catch {
       // ignore localStorage failures
@@ -550,7 +578,9 @@
   }
 
   function findDatabaseTabByPath(path: string) {
-    return tabs.find((tab) => tab.type === "database" && tab.path === path) ?? null;
+    return (
+      tabs.find((tab) => tab.type === "database" && tab.path === path) ?? null
+    );
   }
 
   function resetEditorViewState() {
@@ -577,13 +607,22 @@
 
   async function activateTab(
     tabId: string,
-    options: { skipDirtyCheck?: boolean; force?: boolean } = {},
+    options: { skipDirtyCheck?: boolean; force?: boolean } = {}
   ) {
     if (tabId === activeTabId && !options.force) return;
-    if (!options.skipDirtyCheck && isDirty && !(await confirmDiscardUnsavedChanges())) return;
+    if (
+      !options.skipDirtyCheck &&
+      isDirty &&
+      !(await confirmDiscardUnsavedChanges())
+    )
+      return;
 
     const nextTab = tabs.find((tab) => tab.id === tabId);
     if (!nextTab) return;
+
+    tabStateMap[activeTabId] = {
+      selectedKey,
+    };
 
     activeTabId = tabId;
 
@@ -597,6 +636,13 @@
     dbLocked = getDatabaseLocked(dbPath);
     await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
     await loadKeys();
+
+    const saved = tabStateMap[tabId];
+    if (saved?.selectedKey && keys.includes(saved.selectedKey)) {
+      await fetchValueForSelectedKey(saved.selectedKey);
+      await tick();
+      restoreKeyListScrollForSelectedKey();
+    }
   }
 
   async function addDashboardTab() {
@@ -625,7 +671,8 @@
     if (!canCloseTab(tab)) return;
 
     const closingActiveTab = tabId === activeTabId;
-    if (closingActiveTab && isDirty && !(await confirmDiscardUnsavedChanges())) return;
+    if (closingActiveTab && isDirty && !(await confirmDiscardUnsavedChanges()))
+      return;
 
     if (tab.type === "database") {
       try {
@@ -634,6 +681,9 @@
         // ignore close errors while closing tab
       }
     }
+
+    delete tabStateMap[tabId];
+    tabStateMap = tabStateMap;
 
     tabs = tabs.filter((item) => item.id !== tabId);
     if (tabs.length === 0) {
@@ -660,7 +710,8 @@
     errorMessage = "";
 
     try {
-      const result: OpenDatabaseResult = await LevelDBService.OpenDatabase(path);
+      const result: OpenDatabaseResult =
+        await LevelDBService.OpenDatabase(path);
       if (result.ok) {
         const canonicalPath = result.canonicalPath || path;
         addToRecent(canonicalPath);
@@ -683,8 +734,13 @@
             title: getTabLabel(canonicalPath),
             path: canonicalPath,
           };
-          tabs = tabs.map((tab) => (tab.id === activeDashboardTabId ? replacementTab : tab));
-          await activateTab(activeDashboardTabId, { skipDirtyCheck: true, force: true });
+          tabs = tabs.map((tab) =>
+            tab.id === activeDashboardTabId ? replacementTab : tab
+          );
+          await activateTab(activeDashboardTabId, {
+            skipDirtyCheck: true,
+            force: true,
+          });
           return;
         }
 
@@ -796,8 +852,7 @@
       const message = err instanceof Error ? err.message : String(err);
       await Dialogs.Error({
         Title: source === "auto" ? "Auto-refresh failed" : "Refresh failed",
-        Message:
-          `Could not refresh the open database. ${message}`.trim(),
+        Message: `Could not refresh the open database. ${message}`.trim(),
       });
     } finally {
       await waitForMinimumRefreshFeedback(refreshStartedAtMs);
@@ -855,7 +910,7 @@
   async function acceptRemoteConflictValue(
     key: string,
     currentValueExists: boolean,
-    currentValue: string,
+    currentValue: string
   ) {
     if (currentValueExists) {
       originalValueRaw = currentValue;
@@ -901,13 +956,13 @@
         keyToSave,
         expectedValueRaw,
         localValueRaw,
-        false,
+        false
       );
 
       if (saveResult.conflict) {
         const overwriteLocalChanges = window.confirm(
           "This value was changed by another application after you started editing.\n\n" +
-            "Press OK to overwrite with your local changes, or Cancel to accept the remote value and discard your local edits.",
+            "Press OK to overwrite with your local changes, or Cancel to accept the remote value and discard your local edits."
         );
 
         if (overwriteLocalChanges) {
@@ -916,7 +971,7 @@
             keyToSave,
             expectedValueRaw,
             localValueRaw,
-            true,
+            true
           );
           if (!overwriteResult.ok) {
             throw new Error("Failed to overwrite value.");
@@ -930,7 +985,7 @@
         await acceptRemoteConflictValue(
           keyToSave,
           saveResult.currentValueExists,
-          saveResult.currentValue,
+          saveResult.currentValue
         );
         return;
       }
@@ -1059,7 +1114,11 @@
   async function confirmDeleteKey() {
     if (!keyPendingDelete || isDeleting || dbLocked) return;
     const targetKey = keyPendingDelete;
-    if (isDirty && selectedKey === targetKey && !(await confirmDiscardUnsavedChanges())) {
+    if (
+      isDirty &&
+      selectedKey === targetKey &&
+      !(await confirmDiscardUnsavedChanges())
+    ) {
       return;
     }
 
@@ -1086,7 +1145,8 @@
   }
 
   async function handleTitlebarDoubleClick() {
-    const platformHint = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+    const platformHint =
+      `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
     if (!platformHint.includes("mac")) return;
 
     try {
@@ -1174,7 +1234,11 @@
         isRefreshMenuOpen = false;
       }
 
-      if (isViewMenuOpen && viewMenuContainer && !viewMenuContainer.contains(target)) {
+      if (
+        isViewMenuOpen &&
+        viewMenuContainer &&
+        !viewMenuContainer.contains(target)
+      ) {
         isViewMenuOpen = false;
       }
     };
@@ -1213,15 +1277,22 @@
     ></div>
     <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
-        <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+        <Tabs
+          value={activeTabId}
+          onValueChange={handleTabValueChange}
+          class="w-full"
+        >
+          <TabsList
+            class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none"
+          >
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
                   activeTabId === tab.id
                     ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
-                        (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
+                        (index < tabs.length - 1 &&
+                          activeTabId !== tabs[index + 1].id) ||
                         index === tabs.length - 1
                           ? "border-r-border/60"
                           : ""
@@ -1271,10 +1342,16 @@
     <header
       class="relative z-40 overflow-visible bg-background/80 px-4 pt-3 pb-2 backdrop-blur-sm"
     >
-      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div
+        class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+      >
         <div class="flex min-w-0 items-center justify-between gap-2 md:flex-1">
           <div class="flex min-w-0 items-center gap-2">
-            <Badge variant="secondary" class="max-w-[70vw] truncate md:max-w-[40vw]" title={dbPath}>
+            <Badge
+              variant="secondary"
+              class="max-w-[70vw] truncate md:max-w-[40vw]"
+              title={dbPath}
+            >
               <Database class="mr-1.5 h-3.5 w-3.5" />
               {dbPath.split(/[/\\]/).pop() || dbPath}
             </Badge>
@@ -1298,8 +1375,13 @@
           </Button>
         </div>
 
-        <div class="flex items-center justify-between gap-2 md:shrink-0 md:justify-end">
-          <div bind:this={refreshMenuContainer} class="relative flex items-stretch">
+        <div
+          class="flex items-center justify-between gap-2 md:shrink-0 md:justify-end"
+        >
+          <div
+            bind:this={refreshMenuContainer}
+            class="relative flex items-stretch"
+          >
             <Button
               variant="outline"
               size="sm"
@@ -1371,7 +1453,9 @@
                   <button
                     type="button"
                     class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                      option.intervalMs === autoRefreshIntervalMs ? "bg-muted/80" : ""
+                      option.intervalMs === autoRefreshIntervalMs
+                        ? "bg-muted/80"
+                        : ""
                     }`}
                     role="menuitemradio"
                     aria-checked={option.intervalMs === autoRefreshIntervalMs}
@@ -1425,7 +1509,9 @@
                   <span>Read-only</span>
                   <span
                     class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-                      dbLocked ? "border-primary/40 bg-primary" : "border-border bg-muted"
+                      dbLocked
+                        ? "border-primary/40 bg-primary"
+                        : "border-border bg-muted"
                     }`}
                     aria-hidden="true"
                   >
@@ -1473,11 +1559,9 @@
     <div
       bind:this={editorSplitContainer}
       class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2 md:grid-cols-1"
-      style={
-        isDesktopLayout
-          ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
-          : undefined
-      }
+      style={isDesktopLayout
+        ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
+        : undefined}
     >
       {#if isDesktopLayout}
         <button
@@ -1499,7 +1583,9 @@
 
       <Card
         class="flex min-h-0 min-w-0 flex-col"
-        style={isDesktopLayout ? `min-width: ${MIN_KEY_PANE_WIDTH}px;` : undefined}
+        style={isDesktopLayout
+          ? `min-width: ${MIN_KEY_PANE_WIDTH}px;`
+          : undefined}
       >
         <CardHeader class="space-y-3 pb-3">
           <div class="flex items-center justify-between gap-2">
@@ -1554,7 +1640,9 @@
           </div>
 
           {#if showCreateForm}
-            <div class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2">
+            <div
+              class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2"
+            >
               <input
                 class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                 placeholder="New key (text or 0x...)"
@@ -1562,7 +1650,9 @@
                 disabled={isCreating || dbLocked}
               />
               {#if createKeyValidationError}
-                <p class="text-xs text-destructive">{createKeyValidationError}</p>
+                <p class="text-xs text-destructive">
+                  {createKeyValidationError}
+                </p>
               {/if}
               <textarea
                 class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
@@ -1571,18 +1661,18 @@
                 disabled={isCreating || dbLocked}
               ></textarea>
               {#if createValueValidationError}
-                <p class="text-xs text-destructive">{createValueValidationError}</p>
+                <p class="text-xs text-destructive">
+                  {createValueValidationError}
+                </p>
               {/if}
               <div class="flex items-center gap-2">
                 <Button
                   size="sm"
                   class="gap-1.5"
-                  disabled={
-                    isCreating ||
+                  disabled={isCreating ||
                     dbLocked ||
                     !!createKeyValidationError ||
-                    !!createValueValidationError
-                  }
+                    !!createValueValidationError}
                   on:click={createKey}
                 >
                   <Save class="h-3.5 w-3.5" />
@@ -1616,11 +1706,15 @@
             <ScrollArea
               class="h-full min-h-0 rounded-md border border-border/70"
               contentStyle="display: block; width: 100%; min-width: 100%;"
+              bind:viewportEl={keyListViewportEl}
             >
               <ul class="w-full space-y-1 p-2">
                 {#each filteredKeys as key}
                   <li class="group w-full">
                     <div
+                      data-key-item-selected={selectedKey === key
+                        ? "true"
+                        : undefined}
                       class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
                         selectedKey === key
                           ? "bg-primary/15 text-primary"
@@ -1653,12 +1747,10 @@
                             variant="ghost"
                             size="icon"
                             class="h-7 w-7"
-                            disabled={
-                              isRenaming ||
+                            disabled={isRenaming ||
                               dbLocked ||
                               !renameInput ||
-                              !!renameValidationError
-                            }
+                              !!renameValidationError}
                             on:click={(event) => {
                               event.stopPropagation();
                               void renameEditingKey();
@@ -1727,9 +1819,9 @@
 
       <Card
         class="flex min-h-0 min-w-0 flex-col"
-        style={
-          isDesktopLayout ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;` : undefined
-        }
+        style={isDesktopLayout
+          ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;`
+          : undefined}
       >
         <CardHeader class="space-y-3 pb-3">
           <div class="flex items-center justify-between gap-2">
@@ -1745,13 +1837,11 @@
                 <Button
                   size="sm"
                   class="gap-1.5"
-                  disabled={
-                    !selectedKey ||
+                  disabled={!selectedKey ||
                     !isDirty ||
                     !!valueValidationError ||
                     isSaving ||
-                    dbLocked
-                  }
+                    dbLocked}
                   on:click={saveValue}
                 >
                   <Save class="h-3.5 w-3.5" />
@@ -1771,7 +1861,10 @@
                 <Button
                   size="sm"
                   class="gap-1.5"
-                  disabled={!selectedKey || valueLoading || isSaving || dbLocked}
+                  disabled={!selectedKey ||
+                    valueLoading ||
+                    isSaving ||
+                    dbLocked}
                   on:click={startValueEdit}
                 >
                   <Pencil class="h-3.5 w-3.5" />
@@ -1782,7 +1875,9 @@
           </div>
           <CardDescription>
             {#if selectedKey}
-                <span class="block w-full truncate" title={selectedKey}>{selectedKey}</span>
+              <span class="block w-full truncate" title={selectedKey}
+                >{selectedKey}</span
+              >
             {:else}
               Select a key to inspect its value
             {/if}
@@ -1810,7 +1905,9 @@
               spellcheck="false"
             ></textarea>
             {#if valueValidationError}
-              <p class="px-1 text-xs text-destructive">{valueValidationError}</p>
+              <p class="px-1 text-xs text-destructive">
+                {valueValidationError}
+              </p>
             {/if}
           {/if}
         </CardContent>
@@ -1826,15 +1923,22 @@
     ></div>
     <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
-        <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+        <Tabs
+          value={activeTabId}
+          onValueChange={handleTabValueChange}
+          class="w-full"
+        >
+          <TabsList
+            class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none"
+          >
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
                   activeTabId === tab.id
                     ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
-                        (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
+                        (index < tabs.length - 1 &&
+                          activeTabId !== tabs[index + 1].id) ||
                         index === tabs.length - 1
                           ? "border-r-border/60"
                           : ""

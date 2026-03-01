@@ -9,6 +9,7 @@
     scrollbarYClasses?: string;
     contentClass?: string;
     contentStyle?: string;
+    viewportEl?: HTMLDivElement | undefined;
   };
 
   let className: $$Props["class"] = undefined;
@@ -18,13 +19,14 @@
   export let scrollbarYClasses: string = "";
   export let contentClass: string = "";
   export let contentStyle: string = "display: block; width: 100%; min-width: 100%;";
+  export let viewportEl: HTMLDivElement | undefined = undefined;
 </script>
 
 <ScrollAreaPrimitive.Root
   {...$$restProps}
   class={cn("relative overflow-hidden", className)}
 >
-  <ScrollAreaPrimitive.Viewport class="h-full w-full rounded-[inherit]">
+  <ScrollAreaPrimitive.Viewport bind:el={viewportEl} class="h-full w-full rounded-[inherit]">
     <ScrollAreaPrimitive.Content asChild let:builder>
       <div
         {...builder}

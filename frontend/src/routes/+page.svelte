@@ -1202,12 +1202,12 @@
     <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
                   activeTabId === tab.id
-                    ? "relative z-10 border-t-border/60 border-l-border/60 border-r-border/60 border-b-transparent bg-background text-foreground"
+                    ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
                         (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
                         index === tabs.length - 1
@@ -1253,7 +1253,7 @@
       </ScrollArea>
     </div>
     <header
-      class="relative z-40 overflow-visible border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm"
+      class="relative z-40 overflow-visible bg-background/80 px-4 pt-3 pb-2 backdrop-blur-sm"
     >
       <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div class="flex min-w-0 items-center justify-between gap-2 md:flex-1">
@@ -1456,7 +1456,7 @@
 
     <div
       bind:this={editorSplitContainer}
-      class="relative grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-1"
+      class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2 md:grid-cols-1"
       style={
         isDesktopLayout
           ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
@@ -1811,12 +1811,12 @@
     <div class="bg-background/80 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs value={activeTabId} onValueChange={handleTabValueChange} class="w-full">
-          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border/60 !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
+          <TabsList class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none">
             {#each tabs as tab, index (tab.id)}
               <div
                 class={`-mb-px flex items-center rounded-t-md border border-transparent px-1 ${
                   activeTabId === tab.id
-                    ? "relative z-10 border-t-border/60 border-l-border/60 border-r-border/60 border-b-transparent bg-background text-foreground"
+                    ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                     : `text-muted-foreground hover:bg-muted/40 ${
                         (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
                         index === tabs.length - 1

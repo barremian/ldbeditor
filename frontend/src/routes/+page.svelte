@@ -120,9 +120,19 @@
     { prettyPrintJson: boolean; dbLocked: boolean }
   > = {};
 
-  type TabViewState = { selectedKey: string | null };
+  type TabViewState = {
+    keys: string[];
+    selectedKey: string | null;
+    keySearchInput: string;
+    debouncedKeySearch: string;
+    keyListScrollTop: number | null;
+    originalValueRaw: string;
+    editorValueRaw: string;
+    isValueEditing: boolean;
+  };
   let tabStateMap: Record<string, TabViewState> = {};
-  let keyListViewportEl: HTMLDivElement | undefined = undefined;
+  let keyListViewportEl: HTMLDivElement | null = null;
+  let pendingKeyListScrollTop: number | null | undefined = undefined;
 
   function getSelectedKeyRowElement(viewportEl: HTMLDivElement) {
     return viewportEl.querySelector<HTMLElement>(
@@ -138,6 +148,37 @@
     if (!selectedRowEl) return;
 
     selectedRowEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function restoreKeyListScroll(scrollTop: number | null) {
+    const viewportEl = keyListViewportEl;
+    if (!viewportEl) return;
+    if (scrollTop !== null) {
+      viewportEl.scrollTop = scrollTop;
+      return;
+    }
+    restoreKeyListScrollForSelectedKey();
+  }
+
+  function queueKeyListScrollRestore(scrollTop: number | null) {
+    pendingKeyListScrollTop = scrollTop;
+  }
+
+  function handleKeyListScroll() {
+    const activeTab = getActiveTab();
+    if (
+      !activeTab ||
+      activeTab.type !== "database" ||
+      !dbPath ||
+      activeTab.path !== dbPath ||
+      !keyListViewportEl
+    ) {
+      return;
+    }
+    const existing = tabStateMap[activeTab.id];
+    if (!existing) return;
+    existing.keyListScrollTop = keyListViewportEl.scrollTop;
+    tabStateMap = tabStateMap;
   }
 
   function getHexValidationError(display: string, label: string): string {
@@ -583,6 +624,48 @@
     );
   }
 
+  function captureCurrentTabState() {
+    const activeTab = getActiveTab();
+    if (
+      !activeTab ||
+      activeTab.type !== "database" ||
+      !dbPath ||
+      activeTab.path !== dbPath
+    ) {
+      return;
+    }
+    tabStateMap[activeTab.id] = {
+      keys: [...keys],
+      selectedKey,
+      keySearchInput,
+      debouncedKeySearch,
+      keyListScrollTop:
+        keyListViewportEl?.scrollTop ??
+        tabStateMap[activeTab.id]?.keyListScrollTop ??
+        null,
+      originalValueRaw,
+      editorValueRaw,
+      isValueEditing,
+    };
+  }
+
+  function restoreTabState(state: TabViewState): number | null {
+    keys = [...state.keys];
+    keySearchInput = state.keySearchInput;
+    debouncedKeySearch = state.debouncedKeySearch;
+    if (state.selectedKey && !state.keys.includes(state.selectedKey)) {
+      clearSelection();
+    } else {
+      selectedKey = state.selectedKey;
+      originalValueRaw = state.originalValueRaw;
+      editorValueRaw = state.editorValueRaw;
+      syncEditorDisplayWithRawValue();
+      isValueEditing = state.isValueEditing && state.selectedKey !== null;
+    }
+    valueLoading = false;
+    return state.keyListScrollTop;
+  }
+
   function resetEditorViewState() {
     stopAutoRefresh();
     dbPath = "";
@@ -620,9 +703,7 @@
     const nextTab = tabs.find((tab) => tab.id === tabId);
     if (!nextTab) return;
 
-    tabStateMap[activeTabId] = {
-      selectedKey,
-    };
+    captureCurrentTabState();
 
     activeTabId = tabId;
 
@@ -635,14 +716,20 @@
     prettyPrintJson = getPrettyPrintEnabled(dbPath);
     dbLocked = getDatabaseLocked(dbPath);
     await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
-    await loadKeys();
-
     const saved = tabStateMap[tabId];
-    if (saved?.selectedKey && keys.includes(saved.selectedKey)) {
-      await fetchValueForSelectedKey(saved.selectedKey);
+    if (saved) {
+      const savedScrollTop = restoreTabState(saved);
       await tick();
-      restoreKeyListScrollForSelectedKey();
+      queueKeyListScrollRestore(savedScrollTop);
+      return;
     }
+
+    await loadKeys();
+  }
+
+  $: if (pendingKeyListScrollTop !== undefined && keyListViewportEl) {
+    restoreKeyListScroll(pendingKeyListScrollTop);
+    pendingKeyListScrollTop = undefined;
   }
 
   async function addDashboardTab() {
@@ -720,6 +807,13 @@
           activeTab && activeTab.type === "dashboard" ? activeTab.id : null;
         const existingTab = findDatabaseTabByPath(canonicalPath);
         if (existingTab) {
+          if (result.alreadyOpen) {
+            try {
+              await LevelDBService.CloseDatabase(canonicalPath);
+            } catch {
+              // ignore lease rebalance failures while reusing an existing tab
+            }
+          }
           if (activeDashboardTabId && activeDashboardTabId !== existingTab.id) {
             tabs = tabs.filter((tab) => tab.id !== activeDashboardTabId);
           }
@@ -728,6 +822,8 @@
         }
 
         if (activeDashboardTabId) {
+          delete tabStateMap[activeDashboardTabId];
+          tabStateMap = tabStateMap;
           const replacementTab: WorkspaceTab = {
             id: activeDashboardTabId,
             type: "database",
@@ -1688,10 +1784,10 @@
               No keys match "{keySearchInput.trim()}".
             </div>
           {:else}
-            <ScrollArea
-              class="h-full min-h-0 rounded-md border border-border/70"
-              contentStyle="display: block; width: 100%; min-width: 100%;"
-              bind:viewportEl={keyListViewportEl}
+            <div
+              class="h-full min-h-0 overflow-auto rounded-md border border-border/70"
+              bind:this={keyListViewportEl}
+              on:scroll={handleKeyListScroll}
             >
               <ul class="w-full space-y-1 p-2">
                 {#each filteredKeys as key}
@@ -1797,7 +1893,7 @@
                   </li>
                 {/each}
               </ul>
-            </ScrollArea>
+            </div>
           {/if}
         </CardContent>
       </Card>

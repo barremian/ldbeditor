@@ -614,13 +614,19 @@
     void activateTab(nextTabIdValue);
   }
 
+  function canCloseTab(tab: WorkspaceTab): boolean {
+    return !(tabs.length === 1 && tab.type === "dashboard");
+  }
+
   async function closeTab(tabId: string) {
     const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
     if (tabIndex === -1) return;
+    const tab = tabs[tabIndex];
+    if (!canCloseTab(tab)) return;
+
     const closingActiveTab = tabId === activeTabId;
     if (closingActiveTab && isDirty && !(await confirmDiscardUnsavedChanges())) return;
 
-    const tab = tabs[tabIndex];
     if (tab.type === "database") {
       try {
         await LevelDBService.CloseDatabase(tab.path);
@@ -631,7 +637,13 @@
 
     tabs = tabs.filter((item) => item.id !== tabId);
     if (tabs.length === 0) {
-      await Window.Close();
+      const dashboardTab: WorkspaceTab = {
+        id: tab.id,
+        type: "dashboard",
+        title: "Dashboard",
+      };
+      tabs = [dashboardTab];
+      await activateTab(dashboardTab.id, { skipDirtyCheck: true, force: true });
       return;
     }
 
@@ -1225,18 +1237,20 @@
                     {tab.type === "database" ? tab.title : "Dashboard"}
                   </span>
                 </TabsTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                  title={`Close ${tab.title}`}
-                  on:click={(event) => {
-                    event.stopPropagation();
-                    void closeTab(tab.id);
-                  }}
-                >
-                  <X class="h-3.5 w-3.5" />
-                </Button>
+                {#if canCloseTab(tab)}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                    title={`Close ${tab.title}`}
+                    on:click={(event) => {
+                      event.stopPropagation();
+                      void closeTab(tab.id);
+                    }}
+                  >
+                    <X class="h-3.5 w-3.5" />
+                  </Button>
+                {/if}
               </div>
             {/each}
             <Button
@@ -1836,18 +1850,20 @@
                     {tab.type === "database" ? tab.title : "Dashboard"}
                   </span>
                 </TabsTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                  title={`Close ${tab.title}`}
-                  on:click={(event) => {
-                    event.stopPropagation();
-                    void closeTab(tab.id);
-                  }}
-                >
-                  <X class="h-3.5 w-3.5" />
-                </Button>
+                {#if canCloseTab(tab)}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                    title={`Close ${tab.title}`}
+                    on:click={(event) => {
+                      event.stopPropagation();
+                      void closeTab(tab.id);
+                    }}
+                  >
+                    <X class="h-3.5 w-3.5" />
+                  </Button>
+                {/if}
               </div>
             {/each}
             <Button

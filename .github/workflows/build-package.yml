@@ -37,7 +37,14 @@ jobs:
 
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis -y
+        run: |
+          choco install nsis -y
+          $nsisPath = "${env:ProgramFiles(x86)}\NSIS"
+          if (Test-Path $nsisPath) {
+            $nsisPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            throw "NSIS install directory not found at: $nsisPath"
+          }
 
       - name: Install Wails v3 CLI
         shell: pwsh
@@ -47,7 +54,9 @@ jobs:
 
       - name: Build and package (Windows)
         shell: pwsh
-        run: wails3 task windows:package
+        run: |
+          where.exe makensis
+          wails3 task windows:package
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

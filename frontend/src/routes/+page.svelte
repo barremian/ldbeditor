@@ -133,6 +133,14 @@
   let tabStateMap: Record<string, TabViewState> = {};
   let keyListViewportEl: HTMLDivElement | null = null;
   let pendingKeyListScrollTop: number | null | undefined = undefined;
+  $: showEditorLoadingOverlay = loading || valueLoading || isRefreshing;
+  $: editorLoadingOverlayText = isRefreshing
+    ? "Refreshing database…"
+    : loading && valueLoading
+      ? "Loading database…"
+      : loading
+        ? "Loading keys…"
+        : "Loading value…";
 
   function getSelectedKeyRowElement(viewportEl: HTMLDivElement) {
     return viewportEl.querySelector<HTMLElement>(
@@ -1640,6 +1648,7 @@
     <div
       bind:this={editorSplitContainer}
       class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2 md:grid-cols-1"
+      aria-busy={showEditorLoadingOverlay}
       style={isDesktopLayout
         ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
         : undefined}
@@ -1771,130 +1780,128 @@
             </div>
           {/if}
 
-          {#if loading || isRefreshing}
-            <div class="px-2 py-3 text-sm text-muted-foreground">
-              {isRefreshing ? "Refreshing keys…" : "Loading keys…"}
-            </div>
-          {:else if keys.length === 0}
-            <div class="px-2 py-3 text-sm text-muted-foreground">
-              No keys yet. Use <strong>New</strong> to create your first key.
-            </div>
-          {:else if filteredKeys.length === 0}
-            <div class="px-2 py-3 text-sm text-muted-foreground">
-              No keys match "{keySearchInput.trim()}".
-            </div>
-          {:else}
-            <div
-              class="h-full min-h-0 overflow-auto rounded-md border border-border/70"
-              bind:this={keyListViewportEl}
-              on:scroll={handleKeyListScroll}
-            >
-              <ul class="w-full space-y-1 p-2">
-                {#each filteredKeys as key}
-                  <li class="group w-full">
-                    <div
-                      data-key-item-selected={selectedKey === key
-                        ? "true"
-                        : undefined}
-                      class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        selectedKey === key
-                          ? "bg-primary/15 text-primary"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      {#if editingKey === key}
-                        <div class="min-w-0 flex-1">
-                          <input
-                            class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
-                            bind:this={renameInputElement}
-                            bind:value={renameInput}
-                            disabled={isRenaming || dbLocked}
-                            on:click|stopPropagation
-                            on:keydown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
+          <div class="relative min-h-0 flex-1">
+            {#if keys.length === 0}
+              <div class="px-2 py-3 text-sm text-muted-foreground">
+                No keys yet. Use <strong>New</strong> to create your first key.
+              </div>
+            {:else if filteredKeys.length === 0}
+              <div class="px-2 py-3 text-sm text-muted-foreground">
+                No keys match "{keySearchInput.trim()}".
+              </div>
+            {:else}
+              <div
+                class="h-full min-h-0 overflow-auto rounded-md border border-border/70"
+                bind:this={keyListViewportEl}
+                on:scroll={handleKeyListScroll}
+              >
+                <ul class="w-full space-y-1 p-2">
+                  {#each filteredKeys as key}
+                    <li class="group w-full">
+                      <div
+                        data-key-item-selected={selectedKey === key
+                          ? "true"
+                          : undefined}
+                        class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          selectedKey === key
+                            ? "bg-primary/15 text-primary"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        {#if editingKey === key}
+                          <div class="min-w-0 flex-1">
+                            <input
+                              class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
+                              bind:this={renameInputElement}
+                              bind:value={renameInput}
+                              disabled={isRenaming || dbLocked}
+                              on:click|stopPropagation
+                              on:keydown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void renameEditingKey();
+                                }
+                              }}
+                            />
+                            {#if renameValidationError}
+                              <p class="mt-1 text-xs text-destructive">
+                                {renameValidationError}
+                              </p>
+                            {/if}
+                          </div>
+                          <div class="ml-1 flex shrink-0 items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="h-7 w-7"
+                              disabled={isRenaming ||
+                                dbLocked ||
+                                !renameInput ||
+                                !!renameValidationError}
+                              on:click={(event) => {
+                                event.stopPropagation();
                                 void renameEditingKey();
-                              }
-                            }}
-                          />
-                          {#if renameValidationError}
-                            <p class="mt-1 text-xs text-destructive">
-                              {renameValidationError}
-                            </p>
-                          {/if}
-                        </div>
-                        <div class="ml-1 flex shrink-0 items-center gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-7 w-7"
-                            disabled={isRenaming ||
-                              dbLocked ||
-                              !renameInput ||
-                              !!renameValidationError}
-                            on:click={(event) => {
-                              event.stopPropagation();
-                              void renameEditingKey();
-                            }}
+                              }}
+                            >
+                              <Check class="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="h-7 w-7"
+                              disabled={isRenaming || dbLocked}
+                              on:click={(event) => {
+                                event.stopPropagation();
+                                resetRenameForm();
+                              }}
+                            >
+                              <X class="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        {:else}
+                          <button
+                            class="min-w-0 flex-1 text-left"
+                            title={key}
+                            on:click={() => selectKey(key)}
                           >
-                            <Check class="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-7 w-7"
-                            disabled={isRenaming || dbLocked}
-                            on:click={(event) => {
-                              event.stopPropagation();
-                              resetRenameForm();
-                            }}
+                            <span class="block w-full truncate">{key}</span>
+                          </button>
+                          <div
+                            class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                           >
-                            <X class="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      {:else}
-                        <button
-                          class="min-w-0 flex-1 text-left"
-                          title={key}
-                          on:click={() => selectKey(key)}
-                        >
-                          <span class="block w-full truncate">{key}</span>
-                        </button>
-                        <div
-                          class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-7 w-7"
-                            disabled={dbLocked}
-                            on:click={(event) => {
-                              event.stopPropagation();
-                              startRename(key);
-                            }}
-                          >
-                            <Pencil class="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-7 w-7 text-destructive hover:text-destructive"
-                            disabled={isDeleting || dbLocked}
-                            on:click={(event) => {
-                              event.stopPropagation();
-                              requestDeleteKey(key);
-                            }}
-                          >
-                            <Trash2 class="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      {/if}
-                    </div>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="h-7 w-7"
+                              disabled={dbLocked}
+                              on:click={(event) => {
+                                event.stopPropagation();
+                                startRename(key);
+                              }}
+                            >
+                              <Pencil class="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="h-7 w-7 text-destructive hover:text-destructive"
+                              disabled={isDeleting || dbLocked}
+                              on:click={(event) => {
+                                event.stopPropagation();
+                                requestDeleteKey(key);
+                              }}
+                            >
+                              <Trash2 class="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        {/if}
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          </div>
         </CardContent>
       </Card>
 
@@ -1965,34 +1972,45 @@
           </CardDescription>
         </CardHeader>
         <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
-          {#if valueLoading || isRefreshing}
-            <div class="px-1 py-3 text-sm text-muted-foreground">
-              {isRefreshing ? "Refreshing value…" : "Loading value…"}
-            </div>
-          {:else if selectedKey === null}
-            <div class="px-1 py-3 text-sm text-muted-foreground">
-              Select a key
-            </div>
-          {:else}
-            <textarea
-              class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
-                isValueEditing
-                  ? "bg-background text-foreground focus-visible:border-primary"
-                  : "bg-muted/50 text-foreground"
-              }`}
-              bind:value={editorValue}
-              on:input={handleValueInput}
-              readonly={!isValueEditing || isSaving || dbLocked}
-              spellcheck="false"
-            ></textarea>
-            {#if valueValidationError}
-              <p class="px-1 text-xs text-destructive">
-                {valueValidationError}
-              </p>
+          <div class="relative flex min-h-0 flex-1 flex-col">
+            {#if selectedKey === null}
+              <div class="px-1 py-3 text-sm text-muted-foreground">Select a key</div>
+            {:else}
+              <textarea
+                class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                  isValueEditing
+                    ? "bg-background text-foreground focus-visible:border-primary"
+                    : "bg-muted/50 text-foreground"
+                }`}
+                bind:value={editorValue}
+                on:input={handleValueInput}
+                readonly={!isValueEditing || isSaving || dbLocked}
+                spellcheck="false"
+              ></textarea>
+              {#if valueValidationError}
+                <p class="px-1 text-xs text-destructive">
+                  {valueValidationError}
+                </p>
+              {/if}
             {/if}
-          {/if}
+          </div>
         </CardContent>
       </Card>
+
+      {#if showEditorLoadingOverlay}
+        <div
+          class="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/45 backdrop-blur-md supports-[backdrop-filter]:bg-background/35"
+        >
+          <div
+            role="status"
+            aria-live="polite"
+            class="flex items-center gap-2 rounded-full border border-border/80 bg-background/95 px-4 py-2 text-sm font-medium text-foreground shadow-lg ring-1 ring-border/40"
+          >
+            <RefreshCcw class="h-4 w-4 animate-spin" />
+            <span>{editorLoadingOverlayText}</span>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 {:else}

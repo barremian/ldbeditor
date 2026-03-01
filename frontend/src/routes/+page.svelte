@@ -1140,10 +1140,6 @@
     }
   }
 
-  async function closeDatabase() {
-    await closeTab(activeTabId);
-  }
-
   async function handleTitlebarDoubleClick() {
     const platformHint =
       `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
@@ -1362,17 +1358,6 @@
               <Badge variant="outline">Auto {autoRefreshLabel}</Badge>
             {/if}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            class="gap-2 px-2 sm:px-3"
-            title="Close database"
-            on:click={closeDatabase}
-          >
-            <X class="h-4 w-4" />
-            <span class="hidden sm:inline">Close database</span>
-            <span class="sr-only sm:hidden">Close database</span>
-          </Button>
         </div>
 
         <div

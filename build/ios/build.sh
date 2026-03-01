@@ -3,7 +3,7 @@ set -e
 
 # Build configuration
 APP_NAME="ldbeditor"
-BUNDLE_ID="com.example.ldbeditor"
+BUNDLE_ID="com.barremian.ldbeditor"
 VERSION="0.0.1"
 BUILD_NUMBER="0.0.1"
 BUILD_DIR="build/ios"

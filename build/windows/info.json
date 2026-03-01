@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.0.1",
-			"CompanyName": "My Company",
-			"FileDescription": "A ldbeditor application",
-			"LegalCopyright": "© 2026, My Company",
+			"CompanyName": "Barremian",
+			"FileDescription": "View and edit LevelDB databases",
+			"LegalCopyright": "(c) 2026, Barremian",
 			"ProductName": "LevelDB Editor",
-			"Comments": "This is a comment"
+			"Comments": "View and edit LevelDB databases"
 		}
 	}
 }

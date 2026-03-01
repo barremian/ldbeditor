@@ -97,7 +97,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastUpgradeCheck = 1500;
-				ORGANIZATIONNAME = "My Company";
+				ORGANIZATIONNAME = "Barremian";
 				TargetAttributes = {
 					C0DEBEEF0000000000000040 = {
 						CreatedOnToolsVersion = 15.0;
@@ -176,7 +176,7 @@
 			buildSettings = {
 				INFOPLIST_FILE = main/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.example.ldbeditor";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.barremian.ldbeditor";
 				PRODUCT_NAME = "LevelDB Editor";
 				CODE_SIGNING_ALLOWED = NO;
 				SDKROOT = iphonesimulator;
@@ -188,7 +188,7 @@
 			buildSettings = {
 				INFOPLIST_FILE = main/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.example.ldbeditor";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.barremian.ldbeditor";
 				PRODUCT_NAME = "LevelDB Editor";
 				CODE_SIGNING_ALLOWED = NO;
 				SDKROOT = iphonesimulator;

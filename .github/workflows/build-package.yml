@@ -23,6 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build artifact name suffix
+        id: artifact_suffix
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "suffix=v${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            branch=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
+            echo "suffix=${branch}-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -61,7 +72,7 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ github.ref_name }}
+          name: windows-${{ steps.artifact_suffix.outputs.suffix }}
           if-no-files-found: error
           retention-days: 14
           path: |
@@ -72,9 +83,44 @@ jobs:
   package-macos:
     name: Package macOS
     runs-on: macos-latest
+    strategy:
+      matrix:
+        platform:
+          - darwin/amd64
+          - darwin/arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Normalise platform tag
+        id: normalise_platform
+        shell: bash
+        run: |
+          tag=$(echo "${{ matrix.platform }}" | sed -e 's/\//_/g' -e 's/darwin/mac/g' -e 's/amd64/intel/g')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Normalise version tag
+        id: normalise_version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version=$(echo "${GITHUB_REF_NAME}" | sed -e 's/^v//g')
+          else
+            version=$(echo "${GITHUB_REF_NAME}" | sed -e 's/\//-/g')
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build artifact label
+        id: artifact_label
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            label="v${{ steps.normalise_version.outputs.version }}"
+          else
+            branch=$(echo "${GITHUB_REF_NAME}" | sed -e 's/\//-/g')
+            label="${branch}-${GITHUB_SHA::7}"
+          fi
+          echo "label=$label" >> "$GITHUB_OUTPUT"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -94,20 +140,23 @@ jobs:
           go install github.com/wailsapp/wails/v3/cmd/wails3@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Build and package universal app (macOS)
+      - name: Build and package app (macOS)
         shell: bash
-        run: wails3 task darwin:package:universal
+        run: |
+          platform="${{ matrix.platform }}"
+          arch="${platform##*/}"
+          wails3 task darwin:package ARCH="$arch"
 
       - name: Archive macOS app bundle
         shell: bash
         run: |
           mkdir -p dist
-          tar -C bin -czf "dist/ldbeditor-${GITHUB_REF_NAME}-macos-universal.app.tar.gz" ldbeditor.app
+          tar -C bin -czf "dist/ldbeditor-${{ steps.artifact_label.outputs.label }}-${{ steps.normalise_platform.outputs.tag }}.app.tar.gz" ldbeditor.app
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ github.ref_name }}
+          name: macos-${{ steps.normalise_platform.outputs.tag }}-${{ steps.artifact_label.outputs.label }}
           if-no-files-found: error
           retention-days: 14
           path: |
@@ -119,6 +168,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build artifact name suffix
+        id: artifact_suffix
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "suffix=v${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            branch=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
+            echo "suffix=${branch}-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -155,7 +215,7 @@ jobs:
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-${{ github.ref_name }}
+          name: linux-${{ steps.artifact_suffix.outputs.suffix }}
           if-no-files-found: error
           retention-days: 14
           path: |

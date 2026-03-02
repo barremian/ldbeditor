@@ -1977,7 +1977,7 @@
               <div class="px-1 py-3 text-sm text-muted-foreground">Select a key</div>
             {:else}
               <textarea
-                class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
                   isValueEditing
                     ? "bg-background text-foreground focus-visible:border-primary"
                     : "bg-muted/50 text-foreground"

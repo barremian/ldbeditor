@@ -56,7 +56,8 @@
 
   // Startup view state
   let recentPaths: { path: string; label: string }[] = [];
-  let loading = false;
+  let isOpeningDatabase = false;
+  let isLoadingKeys = false;
   let errorMessage = "";
   type WorkspaceTab =
     | { id: string; type: "dashboard"; title: string }
@@ -134,7 +135,7 @@
   let tabStateMap: Record<string, TabViewState> = {};
   let keyListViewportEl: HTMLDivElement | null = null;
   let pendingKeyListScrollTop: number | null | undefined = undefined;
-  $: showEditorLoadingOverlay = loading || isRefreshing;
+  $: showEditorLoadingOverlay = isLoadingKeys || isRefreshing;
   $: showValueLoadingOverlay = valueLoading;
   $: editorLoadingOverlayText = isRefreshing
     ? "Refreshing database…"
@@ -799,9 +800,9 @@
   }
 
   async function openDatabaseFromPath(path: string) {
-    if (!path || path.trim() === "") return;
+    if (!path || path.trim() === "" || isOpeningDatabase) return;
 
-    loading = true;
+    isOpeningDatabase = true;
     errorMessage = "";
 
     try {
@@ -857,21 +858,24 @@
         tabs = [...tabs, newTab];
         await activateTab(newTab.id);
       } else {
+        isOpeningDatabase = false;
         await Dialogs.Error({
           Title: "Invalid Database",
           Message:
             result.error ||
             "The selected folder is not a valid LevelDB database.",
         });
+        return;
       }
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
+      isOpeningDatabase = false;
       await Dialogs.Error({
         Title: "Error",
         Message: errorMessage,
       });
     } finally {
-      loading = false;
+      isOpeningDatabase = false;
     }
   }
 
@@ -900,7 +904,7 @@
   } = {}) {
     const requestId = ++refreshRequestId;
     const selectedBeforeReload = preserveSelection ? selectedKey : null;
-    loading = true;
+    isLoadingKeys = true;
     try {
       const keyList = await LevelDBService.GetKeys(dbPath);
       if (requestId !== refreshRequestId) return false;
@@ -924,7 +928,7 @@
       errorMessage = message;
       throw new Error(message);
     } finally {
-      loading = false;
+      isLoadingKeys = false;
     }
   }
 
@@ -933,7 +937,7 @@
   }
 
   async function refreshDatabase(source: "manual" | "auto") {
-    if (!dbPath || isRefreshing || loading) {
+    if (!dbPath || isRefreshing || isLoadingKeys) {
       if (source === "auto" && dbPath && autoRefreshIntervalMs > 0) {
         scheduleNextAutoRefresh();
       }
@@ -2130,10 +2134,10 @@
           <Button
             class="gap-2"
             on:click={openDatabaseFromDialog}
-            disabled={loading}
+            disabled={isOpeningDatabase}
           >
             <FolderOpen class="h-4 w-4" />
-            {loading ? "Opening…" : "Open LevelDB database"}
+            {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
           </Button>
 
           {#if errorMessage}
@@ -2155,7 +2159,7 @@
                       variant="ghost"
                       class="w-full justify-start pr-10 font-normal"
                       on:click={() => openDatabaseFromPath(item.path)}
-                      disabled={loading}
+                      disabled={isOpeningDatabase}
                     >
                       {item.label}
                     </Button>
@@ -2169,7 +2173,7 @@
                         event.stopPropagation();
                         removeFromRecent(item.path);
                       }}
-                      disabled={loading}
+                      disabled={isOpeningDatabase}
                     >
                       <X class="h-3.5 w-3.5" />
                     </Button>

@@ -1982,37 +1982,44 @@
             {#if selectedKey === null}
               <div class="px-1 py-3 text-sm text-muted-foreground">Select a key</div>
             {:else}
-              <textarea
-                class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
-                  isValueEditing
-                    ? "bg-background text-foreground focus-visible:border-primary"
-                    : "bg-muted/50 text-foreground"
-                }`}
-                bind:value={editorValue}
-                on:input={handleValueInput}
-                readonly={!isValueEditing || isSaving || dbLocked}
-                spellcheck="false"
-              ></textarea>
-              {#if valueValidationError}
-                <p class="px-1 text-xs text-destructive">
-                  {valueValidationError}
-                </p>
-              {/if}
-            {/if}
-
-            {#if showValueLoadingOverlay}
-              <div
-                class="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-background/45 backdrop-blur-md supports-[backdrop-filter]:bg-background/35"
-              >
+              {#if showValueLoadingOverlay}
                 <div
+                  class="flex h-full min-h-0 flex-1 flex-col rounded-md border border-border/70 bg-muted/20 p-3"
                   role="status"
                   aria-live="polite"
-                  class="flex items-center gap-2 rounded-full border border-border/80 bg-background/95 px-4 py-2 text-sm font-medium text-foreground shadow-lg ring-1 ring-border/40"
                 >
-                  <RefreshCcw class="h-4 w-4 animate-spin" />
-                  <span>Loading value…</span>
+                  <span class="sr-only">Loading value…</span>
+                  <div class="mb-3 h-3 w-40 rounded bg-muted/80 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                  <div class="space-y-2.5" aria-hidden="true">
+                    <div class="h-3 w-full rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[95%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[88%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[92%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[83%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[90%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[72%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[86%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                    <div class="h-3 w-[65%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
+                  </div>
                 </div>
-              </div>
+              {:else}
+                <textarea
+                  class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                    isValueEditing
+                      ? "bg-background text-foreground focus-visible:border-primary"
+                      : "bg-muted/50 text-foreground"
+                  }`}
+                  bind:value={editorValue}
+                  on:input={handleValueInput}
+                  readonly={!isValueEditing || isSaving || dbLocked}
+                  spellcheck="false"
+                ></textarea>
+                {#if valueValidationError}
+                  <p class="px-1 text-xs text-destructive">
+                    {valueValidationError}
+                  </p>
+                {/if}
+              {/if}
             {/if}
           </div>
         </CardContent>

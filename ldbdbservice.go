@@ -2,36 +2,50 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 // LevelDBService provides LevelDB database operations for the frontend.
 type LevelDBService struct {
-	mu sync.RWMutex
+	mu  sync.RWMutex
 	dbs map[string]*dbEntry
 }
 
 type dbEntry struct {
-	db       *leveldb.DB
-	dbLocked bool
-	refCount int
+	db             *leveldb.DB
+	dbLocked       bool
+	forcedReadOnly bool
+	readOnlyReason string
+	lockedByApp    string
+	refCount       int
 }
 
 var errDatabaseLocked = errors.New("database is locked")
+var errDatabaseForcedReadOnly = errors.New("database is open read-only because it is locked by another application")
 
 // OpenDatabaseResult is the result of opening a LevelDB database.
 type OpenDatabaseResult struct {
-	Ok            bool   `json:"ok"`
-	Error         string `json:"error"`
-	CanonicalPath string `json:"canonicalPath"`
-	AlreadyOpen   bool   `json:"alreadyOpen"`
+	Ok             bool   `json:"ok"`
+	Error          string `json:"error"`
+	CanonicalPath  string `json:"canonicalPath"`
+	AlreadyOpen    bool   `json:"alreadyOpen"`
+	ReadOnly       bool   `json:"readOnly"`
+	ForcedReadOnly bool   `json:"forcedReadOnly"`
+	ReadOnlyReason string `json:"readOnlyReason"`
+	LockedByApp    string `json:"lockedByApp"`
 }
 
 // PutValueIfUnchangedResult is the result of a guarded value write.
@@ -60,26 +74,68 @@ func (s *LevelDBService) OpenDatabase(path string) OpenDatabaseResult {
 	if existing, ok := s.dbs[canonicalPath]; ok {
 		existing.refCount++
 		return OpenDatabaseResult{
-			Ok:            true,
-			CanonicalPath: canonicalPath,
-			AlreadyOpen:   true,
+			Ok:             true,
+			CanonicalPath:  canonicalPath,
+			AlreadyOpen:    true,
+			ReadOnly:       existing.dbLocked || existing.forcedReadOnly,
+			ForcedReadOnly: existing.forcedReadOnly,
+			ReadOnlyReason: existing.readOnlyReason,
+			LockedByApp:    existing.lockedByApp,
 		}
 	}
 
 	db, openErr := leveldb.OpenFile(canonicalPath, nil)
 	if openErr != nil {
-		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
+		if !isLevelDBLockError(openErr) {
+			return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
+		}
+
+		readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
+		if readOnlyErr != nil {
+			return OpenDatabaseResult{Ok: false, Error: readOnlyErr.Error()}
+		}
+
+		lockedByApp := detectLockingAppName(canonicalPath)
+		reason := "Database is locked by another application."
+		if lockedByApp != "" {
+			reason = fmt.Sprintf("Database is locked by %s.", lockedByApp)
+		}
+
+		s.dbs[canonicalPath] = &dbEntry{
+			db:             readOnlyDB,
+			dbLocked:       false,
+			forcedReadOnly: true,
+			readOnlyReason: reason,
+			lockedByApp:    lockedByApp,
+			refCount:       1,
+		}
+		return OpenDatabaseResult{
+			Ok:             true,
+			CanonicalPath:  canonicalPath,
+			AlreadyOpen:    false,
+			ReadOnly:       true,
+			ForcedReadOnly: true,
+			ReadOnlyReason: reason,
+			LockedByApp:    lockedByApp,
+		}
 	}
 
 	s.dbs[canonicalPath] = &dbEntry{
-		db:       db,
-		dbLocked: false,
-		refCount: 1,
+		db:             db,
+		dbLocked:       false,
+		forcedReadOnly: false,
+		readOnlyReason: "",
+		lockedByApp:    "",
+		refCount:       1,
 	}
 	return OpenDatabaseResult{
-		Ok:            true,
-		CanonicalPath: canonicalPath,
-		AlreadyOpen:   false,
+		Ok:             true,
+		CanonicalPath:  canonicalPath,
+		AlreadyOpen:    false,
+		ReadOnly:       false,
+		ForcedReadOnly: false,
+		ReadOnlyReason: "",
+		LockedByApp:    "",
 	}
 }
 
@@ -340,10 +396,70 @@ func (s *LevelDBService) writableDatabase(path string) (*leveldb.DB, error) {
 	if !ok || entry.db == nil {
 		return nil, errors.New("database is not open")
 	}
+	if entry.forcedReadOnly {
+		return nil, errDatabaseForcedReadOnly
+	}
 	if entry.dbLocked {
 		return nil, errDatabaseLocked
 	}
 	return entry.db, nil
+}
+
+func isLevelDBLockError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, storage.ErrLocked) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "already locked") ||
+		strings.Contains(message, "resource temporarily unavailable")
+}
+
+func detectLockingAppName(canonicalPath string) string {
+	lockFilePath := filepath.Join(canonicalPath, "LOCK")
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	// lsof is best-effort and may not be available on every platform/build.
+	output, err := exec.CommandContext(ctx, "lsof", "-Fpc", "--", lockFilePath).Output()
+	if err != nil {
+		return ""
+	}
+	return parseLsofProcessName(output, os.Getpid())
+}
+
+func parseLsofProcessName(output []byte, skipPID int) string {
+	lines := strings.Split(string(output), "\n")
+	currentPID := 0
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		switch line[0] {
+		case 'p':
+			pidText := strings.TrimSpace(line[1:])
+			currentPID = 0
+			if pidText == "" {
+				continue
+			}
+			var parsedPID int
+			_, _ = fmt.Sscanf(pidText, "%d", &parsedPID)
+			currentPID = parsedPID
+		case 'c':
+			if currentPID != 0 && currentPID == skipPID {
+				continue
+			}
+			name := strings.TrimSpace(line[1:])
+			if name != "" {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 func canonicalizePath(path string) (string, error) {

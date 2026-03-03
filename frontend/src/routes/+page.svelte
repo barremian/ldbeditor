@@ -117,6 +117,15 @@
   let valueRequestId = 0;
   let prettyPrintJson = false;
   let dbLocked = false;
+  let dbForcedReadOnly = false;
+  let dbReadOnlyReason = "";
+  let dbLockedByApp = "";
+  let showLockedByAppInReadOnlyNotice = false;
+  let forcedReadOnlyByDatabase: Record<
+    string,
+    { readOnlyReason: string; lockedByApp: string }
+  > = {};
+  let effectiveReadOnly = false;
   let valueFormatPrefsByDatabase: Record<
     string,
     { prettyPrintJson: boolean; dbLocked: boolean }
@@ -213,6 +222,10 @@
     : keys;
   $: scheduleDebouncedKeySearch(keySearchInput);
   $: autoRefreshLabel = getAutoRefreshLabel(autoRefreshIntervalMs);
+  $: effectiveReadOnly = dbLocked || dbForcedReadOnly;
+  $: showLockedByAppInReadOnlyNotice =
+    Boolean(dbLockedByApp.trim()) &&
+    !dbReadOnlyReason.toLowerCase().includes(dbLockedByApp.toLowerCase());
   $: remainingAutoRefreshMs =
     autoRefreshIntervalMs > 0 && nextRefreshAt
       ? Math.max(0, nextRefreshAt - countdownNow)
@@ -318,6 +331,15 @@
     return Boolean(valueFormatPrefsByDatabase[path]?.dbLocked);
   }
 
+  function getForcedReadOnlyState(path: string): {
+    readOnlyReason: string;
+    lockedByApp: string;
+  } | null {
+    const state = forcedReadOnlyByDatabase[path];
+    if (!state) return null;
+    return state;
+  }
+
   function setPrettyPrintEnabled(path: string, enabled: boolean) {
     if (!path) return;
     const existing = valueFormatPrefsByDatabase[path];
@@ -344,8 +366,30 @@
     saveValueFormatPrefs();
   }
 
+  function setForcedReadOnlyState(
+    path: string,
+    forcedReadOnly: boolean,
+    readOnlyReason: string,
+    lockedByApp: string
+  ) {
+    if (!path) return;
+    if (!forcedReadOnly) {
+      if (!forcedReadOnlyByDatabase[path]) return;
+      const { [path]: _, ...rest } = forcedReadOnlyByDatabase;
+      forcedReadOnlyByDatabase = rest;
+      return;
+    }
+    forcedReadOnlyByDatabase = {
+      ...forcedReadOnlyByDatabase,
+      [path]: {
+        readOnlyReason,
+        lockedByApp,
+      },
+    };
+  }
+
   async function toggleDatabaseLock() {
-    if (!dbPath) return;
+    if (!dbPath || dbForcedReadOnly) return;
     const nextLocked = !dbLocked;
 
     try {
@@ -680,6 +724,9 @@
     dbPath = "";
     prettyPrintJson = false;
     dbLocked = false;
+    dbForcedReadOnly = false;
+    dbReadOnlyReason = "";
+    dbLockedByApp = "";
     keys = [];
     filteredKeys = [];
     keySearchInput = "";
@@ -724,7 +771,13 @@
     dbPath = nextTab.path;
     prettyPrintJson = getPrettyPrintEnabled(dbPath);
     dbLocked = getDatabaseLocked(dbPath);
-    await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
+    const forcedState = getForcedReadOnlyState(dbPath);
+    dbForcedReadOnly = Boolean(forcedState);
+    dbReadOnlyReason = forcedState?.readOnlyReason ?? "";
+    dbLockedByApp = forcedState?.lockedByApp ?? "";
+    if (!dbForcedReadOnly) {
+      await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
+    }
     const saved = tabStateMap[tabId];
     if (saved) {
       const savedScrollTop = restoreTabState(saved);
@@ -810,6 +863,13 @@
         await LevelDBService.OpenDatabase(path);
       if (result.ok) {
         const canonicalPath = result.canonicalPath || path;
+        const forcedReadOnly = Boolean(result.forcedReadOnly);
+        setForcedReadOnlyState(
+          canonicalPath,
+          forcedReadOnly,
+          result.readOnlyReason || "",
+          result.lockedByApp || ""
+        );
         addToRecent(canonicalPath);
         const activeTab = getActiveTab();
         const activeDashboardTabId =
@@ -1016,7 +1076,7 @@
   }
 
   function startValueEdit() {
-    if (!selectedKey || valueLoading || isSaving || dbLocked) return;
+    if (!selectedKey || valueLoading || isSaving || effectiveReadOnly) return;
     isValueEditing = true;
   }
 
@@ -1051,7 +1111,7 @@
       !selectedKey ||
       !isValueEditing ||
       isSaving ||
-      dbLocked ||
+      effectiveReadOnly ||
       !isDirty ||
       valueValidationError
     ) {
@@ -1127,7 +1187,7 @@
   }
 
   function startRename(key: string) {
-    if (isRenaming || dbLocked) return;
+    if (isRenaming || effectiveReadOnly) return;
     editingKey = key;
     renameInput = key;
     void tick().then(() => {
@@ -1141,7 +1201,7 @@
   async function createKey() {
     if (
       isCreating ||
-      dbLocked ||
+      effectiveReadOnly ||
       createKeyValidationError ||
       createValueValidationError
     ) {
@@ -1181,7 +1241,8 @@
   }
 
   async function renameEditingKey() {
-    if (!editingKey || isRenaming || dbLocked || renameValidationError) return;
+    if (!editingKey || isRenaming || effectiveReadOnly || renameValidationError)
+      return;
     if (!renameInput) {
       await Dialogs.Error({
         Title: "Invalid key",
@@ -1220,12 +1281,12 @@
   }
 
   function requestDeleteKey(key: string) {
-    if (isDeleting || dbLocked) return;
+    if (isDeleting || effectiveReadOnly) return;
     keyPendingDelete = key;
   }
 
   async function confirmDeleteKey() {
-    if (!keyPendingDelete || isDeleting || dbLocked) return;
+    if (!keyPendingDelete || isDeleting || effectiveReadOnly) return;
     const targetKey = keyPendingDelete;
     if (
       isDirty &&
@@ -1301,7 +1362,7 @@
           selectedKey &&
           isValueEditing &&
           isDirty &&
-          !dbLocked &&
+          !effectiveReadOnly &&
           !isSaving &&
           !valueValidationError
         ) {
@@ -1464,7 +1525,7 @@
               <Database class="mr-1.5 h-3.5 w-3.5" />
               {dbPath.split(/[/\\]/).pop() || dbPath}
             </Badge>
-            {#if dbLocked}
+            {#if dbLocked && !dbForcedReadOnly}
               <Badge variant="outline">Read-only</Badge>
             {/if}
             {#if autoRefreshIntervalMs > 0}
@@ -1600,7 +1661,9 @@
                   }`}
                   role="menuitemcheckbox"
                   aria-checked={dbLocked}
+                  disabled={dbForcedReadOnly}
                   on:click={() => {
+                    if (dbForcedReadOnly) return;
                     void toggleDatabaseLock();
                   }}
                 >
@@ -1680,6 +1743,23 @@
         </button>
       {/if}
 
+      {#if dbForcedReadOnly}
+        <div
+          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 md:col-span-2"
+          role="status"
+          aria-live="polite"
+        >
+          <p class="font-medium">Opened in strict read-only mode.</p>
+          <p class="mt-0.5 text-xs opacity-90">
+            {dbReadOnlyReason ||
+              "This database is currently in use by another application, so editing is disabled."}
+          </p>
+          {#if showLockedByAppInReadOnlyNotice}
+            <p class="mt-0.5 text-xs opacity-90">In use by: {dbLockedByApp}</p>
+          {/if}
+        </div>
+      {/if}
+
       <Card
         class="flex min-h-0 min-w-0 flex-col"
         style={isDesktopLayout
@@ -1697,7 +1777,7 @@
                 variant="outline"
                 size="sm"
                 class="gap-1.5"
-                disabled={dbLocked}
+                disabled={effectiveReadOnly}
                 on:click={() => {
                   showCreateForm = !showCreateForm;
                   if (!showCreateForm) {
@@ -1746,7 +1826,7 @@
                 class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                 placeholder="New key (text or 0x...)"
                 bind:value={newKeyInput}
-                disabled={isCreating || dbLocked}
+                disabled={isCreating || effectiveReadOnly}
               />
               {#if createKeyValidationError}
                 <p class="text-xs text-destructive">
@@ -1757,7 +1837,7 @@
                 class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
                 placeholder="Initial value (text or 0x...)"
                 bind:value={newValueInput}
-                disabled={isCreating || dbLocked}
+                disabled={isCreating || effectiveReadOnly}
               ></textarea>
               {#if createValueValidationError}
                 <p class="text-xs text-destructive">
@@ -1769,7 +1849,7 @@
                   size="sm"
                   class="gap-1.5"
                   disabled={isCreating ||
-                    dbLocked ||
+                    effectiveReadOnly ||
                     !!createKeyValidationError ||
                     !!createValueValidationError}
                   on:click={createKey}
@@ -1823,7 +1903,7 @@
                               class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
                               bind:this={renameInputElement}
                               bind:value={renameInput}
-                              disabled={isRenaming || dbLocked}
+                              disabled={isRenaming || effectiveReadOnly}
                               on:click|stopPropagation
                               on:keydown={(event) => {
                                 if (event.key === "Enter") {
@@ -1844,7 +1924,7 @@
                               size="icon"
                               class="h-7 w-7"
                               disabled={isRenaming ||
-                                dbLocked ||
+                                effectiveReadOnly ||
                                 !renameInput ||
                                 !!renameValidationError}
                               on:click={(event) => {
@@ -1858,7 +1938,7 @@
                               variant="ghost"
                               size="icon"
                               class="h-7 w-7"
-                              disabled={isRenaming || dbLocked}
+                              disabled={isRenaming || effectiveReadOnly}
                               on:click={(event) => {
                                 event.stopPropagation();
                                 resetRenameForm();
@@ -1882,7 +1962,7 @@
                               variant="ghost"
                               size="icon"
                               class="h-7 w-7"
-                              disabled={dbLocked}
+                              disabled={effectiveReadOnly}
                               on:click={(event) => {
                                 event.stopPropagation();
                                 startRename(key);
@@ -1894,7 +1974,7 @@
                               variant="ghost"
                               size="icon"
                               class="h-7 w-7 text-destructive hover:text-destructive"
-                              disabled={isDeleting || dbLocked}
+                              disabled={isDeleting || effectiveReadOnly}
                               on:click={(event) => {
                                 event.stopPropagation();
                                 requestDeleteKey(key);
@@ -1939,7 +2019,7 @@
                     !isDirty ||
                     !!valueValidationError ||
                     isSaving ||
-                    dbLocked}
+                    effectiveReadOnly}
                   on:click={saveValue}
                 >
                   <Save class="h-3.5 w-3.5" />
@@ -1962,7 +2042,7 @@
                   disabled={!selectedKey ||
                     valueLoading ||
                     isSaving ||
-                    dbLocked}
+                    effectiveReadOnly}
                   on:click={startValueEdit}
                 >
                   <Pencil class="h-3.5 w-3.5" />
@@ -2015,7 +2095,7 @@
                   }`}
                   bind:value={editorValue}
                   on:input={handleValueInput}
-                  readonly={!isValueEditing || isSaving || dbLocked}
+                  readonly={!isValueEditing || isSaving || effectiveReadOnly}
                   spellcheck="false"
                 ></textarea>
                 {#if valueValidationError}
@@ -2218,7 +2298,7 @@
         <Button
           variant="outline"
           size="sm"
-          disabled={isDeleting || dbLocked}
+          disabled={isDeleting || effectiveReadOnly}
           on:click={() => {
             keyPendingDelete = null;
           }}
@@ -2228,7 +2308,7 @@
         <Button
           variant="destructive"
           size="sm"
-          disabled={isDeleting || dbLocked}
+          disabled={isDeleting || effectiveReadOnly}
           on:click={confirmDeleteKey}
         >
           <Trash2 class="mr-1.5 h-3.5 w-3.5" />

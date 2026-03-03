@@ -13,6 +13,10 @@ export class OpenDatabaseResult {
     "error": string;
     "canonicalPath": string;
     "alreadyOpen": boolean;
+    "readOnly": boolean;
+    "forcedReadOnly": boolean;
+    "readOnlyReason": string;
+    "lockedByApp": string;
 
     /** Creates a new OpenDatabaseResult instance. */
     constructor($$source: Partial<OpenDatabaseResult> = {}) {
@@ -27,6 +31,18 @@ export class OpenDatabaseResult {
         }
         if (!("alreadyOpen" in $$source)) {
             this["alreadyOpen"] = false;
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("forcedReadOnly" in $$source)) {
+            this["forcedReadOnly"] = false;
+        }
+        if (!("readOnlyReason" in $$source)) {
+            this["readOnlyReason"] = "";
+        }
+        if (!("lockedByApp" in $$source)) {
+            this["lockedByApp"] = "";
         }
 
         Object.assign(this, $$source);

@@ -113,6 +113,7 @@
   let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
+  let valueRequestId = 0;
   let prettyPrintJson = false;
   let dbLocked = false;
   let valueFormatPrefsByDatabase: Record<
@@ -133,14 +134,11 @@
   let tabStateMap: Record<string, TabViewState> = {};
   let keyListViewportEl: HTMLDivElement | null = null;
   let pendingKeyListScrollTop: number | null | undefined = undefined;
-  $: showEditorLoadingOverlay = loading || valueLoading || isRefreshing;
+  $: showEditorLoadingOverlay = loading || isRefreshing;
+  $: showValueLoadingOverlay = valueLoading;
   $: editorLoadingOverlayText = isRefreshing
     ? "Refreshing database…"
-    : loading && valueLoading
-      ? "Loading database…"
-      : loading
-        ? "Loading keys…"
-        : "Loading value…";
+    : "Loading keys…";
 
   function getSelectedKeyRowElement(viewportEl: HTMLDivElement) {
     return viewportEl.querySelector<HTMLElement>(
@@ -242,6 +240,7 @@
   }
 
   function clearSelection() {
+    valueRequestId += 1;
     selectedKey = null;
     originalValueRaw = "";
     editorValueRaw = "";
@@ -675,6 +674,7 @@
   }
 
   function resetEditorViewState() {
+    valueRequestId += 1;
     stopAutoRefresh();
     dbPath = "";
     prettyPrintJson = false;
@@ -977,6 +977,7 @@
   }
 
   async function fetchValueForSelectedKey(key: string) {
+    const requestId = ++valueRequestId;
     selectedKey = key;
     isValueEditing = false;
     valueLoading = true;
@@ -986,16 +987,20 @@
 
     try {
       const value = await LevelDBService.GetValue(dbPath, key);
+      if (requestId !== valueRequestId || selectedKey !== key) return;
       originalValueRaw = value ?? "";
       editorValueRaw = originalValueRaw;
       editorValue = formatValueForDisplay(editorValueRaw);
     } catch (err) {
+      if (requestId !== valueRequestId || selectedKey !== key) return;
       const message = `Error: ${err instanceof Error ? err.message : String(err)}`;
       originalValueRaw = message;
       editorValueRaw = message;
       editorValue = formatValueForDisplay(editorValueRaw);
     } finally {
-      valueLoading = false;
+      if (requestId === valueRequestId) {
+        valueLoading = false;
+      }
     }
   }
 
@@ -1910,6 +1915,7 @@
         style={isDesktopLayout
           ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;`
           : undefined}
+        aria-busy={showValueLoadingOverlay}
       >
         <CardHeader class="space-y-3 pb-3">
           <div class="flex items-center justify-between gap-2">
@@ -1992,6 +1998,21 @@
                   {valueValidationError}
                 </p>
               {/if}
+            {/if}
+
+            {#if showValueLoadingOverlay}
+              <div
+                class="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-background/45 backdrop-blur-md supports-[backdrop-filter]:bg-background/35"
+              >
+                <div
+                  role="status"
+                  aria-live="polite"
+                  class="flex items-center gap-2 rounded-full border border-border/80 bg-background/95 px-4 py-2 text-sm font-medium text-foreground shadow-lg ring-1 ring-border/40"
+                >
+                  <RefreshCcw class="h-4 w-4 animate-spin" />
+                  <span>Loading value…</span>
+                </div>
+              </div>
             {/if}
           </div>
         </CardContent>

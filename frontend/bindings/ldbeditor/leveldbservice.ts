@@ -78,6 +78,15 @@ export function PutValueIfUnchanged(path: string, keyDisplay: string, expectedVa
 }
 
 /**
+ * RefreshDatabase closes and reopens an already-open database path so reads reflect external updates.
+ */
+export function RefreshDatabase(path: string): $CancellablePromise<$models.OpenDatabaseResult> {
+    return $Call.ByID(479048497, path).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * RenameKey renames a key while preserving its value.
  * oldKeyDisplay and newKeyDisplay use the same key format as GetKeys.
  */

@@ -1015,6 +1015,21 @@
     isRefreshing = true;
     const refreshStartedAtMs = Date.now();
     try {
+      const refreshResult: OpenDatabaseResult =
+        await LevelDBService.RefreshDatabase(dbPath);
+      const canonicalPath = refreshResult.canonicalPath || dbPath;
+      const forcedReadOnly = Boolean(refreshResult.forcedReadOnly);
+      setForcedReadOnlyState(
+        canonicalPath,
+        forcedReadOnly,
+        refreshResult.readOnlyReason || "",
+        refreshResult.lockedByApp || ""
+      );
+      if (canonicalPath === dbPath) {
+        dbForcedReadOnly = forcedReadOnly;
+        dbReadOnlyReason = refreshResult.readOnlyReason || "";
+        dbLockedByApp = refreshResult.lockedByApp || "";
+      }
       await reloadDatabase({ preserveSelection: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

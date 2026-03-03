@@ -33,6 +33,13 @@ type dbEntry struct {
 	refCount       int
 }
 
+type openedDB struct {
+	db             *leveldb.DB
+	forcedReadOnly bool
+	readOnlyReason string
+	lockedByApp    string
+}
+
 var errDatabaseLocked = errors.New("database is locked")
 var errDatabaseForcedReadOnly = errors.New("database is open read-only because it is locked by another application")
 
@@ -84,59 +91,59 @@ func (s *LevelDBService) OpenDatabase(path string) OpenDatabaseResult {
 		}
 	}
 
-	db, openErr := leveldb.OpenFile(canonicalPath, nil)
+	opened, openErr := openDatabaseHandle(canonicalPath)
 	if openErr != nil {
-		if !isLevelDBLockError(openErr) {
-			return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
-		}
-
-		readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
-		if readOnlyErr != nil {
-			return OpenDatabaseResult{Ok: false, Error: readOnlyErr.Error()}
-		}
-
-		lockedByApp := detectLockingAppName(canonicalPath)
-		reason := "Database is locked by another application."
-		if lockedByApp != "" {
-			reason = fmt.Sprintf("Database is locked by %s.", lockedByApp)
-		}
-
-		s.dbs[canonicalPath] = &dbEntry{
-			db:             readOnlyDB,
-			dbLocked:       false,
-			forcedReadOnly: true,
-			readOnlyReason: reason,
-			lockedByApp:    lockedByApp,
-			refCount:       1,
-		}
-		return OpenDatabaseResult{
-			Ok:             true,
-			CanonicalPath:  canonicalPath,
-			AlreadyOpen:    false,
-			ReadOnly:       true,
-			ForcedReadOnly: true,
-			ReadOnlyReason: reason,
-			LockedByApp:    lockedByApp,
-		}
+		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
 	}
 
 	s.dbs[canonicalPath] = &dbEntry{
-		db:             db,
+		db:             opened.db,
 		dbLocked:       false,
-		forcedReadOnly: false,
-		readOnlyReason: "",
-		lockedByApp:    "",
+		forcedReadOnly: opened.forcedReadOnly,
+		readOnlyReason: opened.readOnlyReason,
+		lockedByApp:    opened.lockedByApp,
 		refCount:       1,
 	}
-	return OpenDatabaseResult{
-		Ok:             true,
-		CanonicalPath:  canonicalPath,
-		AlreadyOpen:    false,
-		ReadOnly:       false,
-		ForcedReadOnly: false,
-		ReadOnlyReason: "",
-		LockedByApp:    "",
+	return openResultFromEntry(canonicalPath, false, s.dbs[canonicalPath])
+}
+
+// RefreshDatabase closes and reopens an already-open database path so reads reflect external updates.
+func (s *LevelDBService) RefreshDatabase(path string) (OpenDatabaseResult, error) {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return OpenDatabaseResult{}, err
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry, ok := s.dbs[canonicalPath]
+	if !ok || entry.db == nil {
+		return OpenDatabaseResult{}, errors.New("database is not open")
+	}
+
+	refCount := entry.refCount
+	dbLocked := entry.dbLocked
+	if closeErr := entry.db.Close(); closeErr != nil {
+		return OpenDatabaseResult{}, closeErr
+	}
+
+	opened, openErr := openDatabaseHandle(canonicalPath)
+	if openErr != nil {
+		delete(s.dbs, canonicalPath)
+		return OpenDatabaseResult{}, openErr
+	}
+
+	s.dbs[canonicalPath] = &dbEntry{
+		db:             opened.db,
+		dbLocked:       dbLocked,
+		forcedReadOnly: opened.forcedReadOnly,
+		readOnlyReason: opened.readOnlyReason,
+		lockedByApp:    opened.lockedByApp,
+		refCount:       refCount,
+	}
+
+	return openResultFromEntry(canonicalPath, true, s.dbs[canonicalPath]), nil
 }
 
 // GetKeys returns all keys in the requested open database.
@@ -416,6 +423,53 @@ func isLevelDBLockError(err error) bool {
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "already locked") ||
 		strings.Contains(message, "resource temporarily unavailable")
+}
+
+func openDatabaseHandle(canonicalPath string) (*openedDB, error) {
+	db, openErr := leveldb.OpenFile(canonicalPath, nil)
+	if openErr == nil {
+		return &openedDB{db: db}, nil
+	}
+	if !isLevelDBLockError(openErr) {
+		return nil, openErr
+	}
+
+	readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
+	if readOnlyErr != nil {
+		return nil, readOnlyErr
+	}
+
+	lockedByApp := detectLockingAppName(canonicalPath)
+	reason := "Database is locked by another application."
+	if lockedByApp != "" {
+		reason = fmt.Sprintf("Database is locked by %s.", lockedByApp)
+	}
+
+	return &openedDB{
+		db:             readOnlyDB,
+		forcedReadOnly: true,
+		readOnlyReason: reason,
+		lockedByApp:    lockedByApp,
+	}, nil
+}
+
+func openResultFromEntry(canonicalPath string, alreadyOpen bool, entry *dbEntry) OpenDatabaseResult {
+	if entry == nil {
+		return OpenDatabaseResult{
+			Ok:            false,
+			Error:         "database is not open",
+			CanonicalPath: canonicalPath,
+		}
+	}
+	return OpenDatabaseResult{
+		Ok:             true,
+		CanonicalPath:  canonicalPath,
+		AlreadyOpen:    alreadyOpen,
+		ReadOnly:       entry.dbLocked || entry.forcedReadOnly,
+		ForcedReadOnly: entry.forcedReadOnly,
+		ReadOnlyReason: entry.readOnlyReason,
+		LockedByApp:    entry.lockedByApp,
+	}
 }
 
 func detectLockingAppName(canonicalPath string) string {

@@ -2292,6 +2292,7 @@
                       disabled={isOpeningDatabase}
                     >
                       RO
+                      <span class="truncate block">{item.label}</span>
                     </Button>
 
                     <Button

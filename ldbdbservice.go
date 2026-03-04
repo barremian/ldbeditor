@@ -422,7 +422,10 @@ func isLevelDBLockError(err error) bool {
 
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "already locked") ||
-		strings.Contains(message, "resource temporarily unavailable")
+		strings.Contains(message, "resource temporarily unavailable") ||
+		strings.Contains(message, "being used by another process") ||
+		strings.Contains(message, "sharing violation") ||
+		strings.Contains(message, "cannot access the file")
 }
 
 func openDatabaseHandle(canonicalPath string) (*openedDB, error) {
@@ -430,19 +433,19 @@ func openDatabaseHandle(canonicalPath string) (*openedDB, error) {
 	if openErr == nil {
 		return &openedDB{db: db}, nil
 	}
-	if !isLevelDBLockError(openErr) {
+	readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
+	if readOnlyErr != nil {
 		return nil, openErr
 	}
 
-	readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
-	if readOnlyErr != nil {
-		return nil, readOnlyErr
-	}
-
-	lockedByApp := detectLockingAppName(canonicalPath)
-	reason := "Database is locked by another application."
-	if lockedByApp != "" {
-		reason = fmt.Sprintf("Database is locked by %s.", lockedByApp)
+	lockedByApp := ""
+	reason := "Database could not be opened for writing. Opened in read-only mode."
+	if isLevelDBLockError(openErr) {
+		lockedByApp = detectLockingAppName(canonicalPath)
+		reason = "Database is locked by another application."
+		if lockedByApp != "" {
+			reason = fmt.Sprintf("Database is locked by %s.", lockedByApp)
+		}
 	}
 
 	return &openedDB{

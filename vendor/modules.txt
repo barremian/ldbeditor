@@ -235,7 +235,7 @@ github.com/wailsapp/go-webview2/internal/w32
 github.com/wailsapp/go-webview2/pkg/combridge
 github.com/wailsapp/go-webview2/pkg/edge
 github.com/wailsapp/go-webview2/webviewloader
-# github.com/wailsapp/wails/v3 v3.0.0-alpha.72
+# github.com/wailsapp/wails/v3 v3.0.0-alpha.74
 ## explicit; go 1.25
 github.com/wailsapp/wails/v3/internal/assetserver
 github.com/wailsapp/wails/v3/internal/assetserver/bundledassets

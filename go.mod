@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.72
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.74
 )
 
 require (

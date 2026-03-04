@@ -15,6 +15,7 @@ export class OpenDatabaseResult {
     "alreadyOpen": boolean;
     "readOnly": boolean;
     "forcedReadOnly": boolean;
+    "intentionalReadOnly": boolean;
     "readOnlyReason": string;
     "lockedByApp": string;
 
@@ -37,6 +38,9 @@ export class OpenDatabaseResult {
         }
         if (!("forcedReadOnly" in $$source)) {
             this["forcedReadOnly"] = false;
+        }
+        if (!("intentionalReadOnly" in $$source)) {
+            this["intentionalReadOnly"] = false;
         }
         if (!("readOnlyReason" in $$source)) {
             this["readOnlyReason"] = "";

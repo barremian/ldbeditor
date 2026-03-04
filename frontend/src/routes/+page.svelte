@@ -33,6 +33,7 @@
 
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
+  const OPEN_MODE_STORAGE_KEY = "database-open-mode-strict-readonly";
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
   const VALUE_FORMAT_PREFS_STORAGE_KEY = "value-format-preferences";
   const KEY_SEARCH_DEBOUNCE_MS = 300;
@@ -118,12 +119,18 @@
   let prettyPrintJson = false;
   let dbLocked = false;
   let dbForcedReadOnly = false;
+  let dbIntentionalReadOnly = false;
   let dbReadOnlyReason = "";
   let dbLockedByApp = "";
+  let strictReadOnlyOpenMode = false;
   let showLockedByAppInReadOnlyNotice = false;
   let forcedReadOnlyByDatabase: Record<
     string,
-    { readOnlyReason: string; lockedByApp: string }
+    {
+      readOnlyReason: string;
+      lockedByApp: string;
+      intentionalReadOnly: boolean;
+    }
   > = {};
   let effectiveReadOnly = false;
   let valueFormatPrefsByDatabase: Record<
@@ -334,6 +341,7 @@
   function getForcedReadOnlyState(path: string): {
     readOnlyReason: string;
     lockedByApp: string;
+    intentionalReadOnly: boolean;
   } | null {
     const state = forcedReadOnlyByDatabase[path];
     if (!state) return null;
@@ -370,7 +378,8 @@
     path: string,
     forcedReadOnly: boolean,
     readOnlyReason: string,
-    lockedByApp: string
+    lockedByApp: string,
+    intentionalReadOnly: boolean
   ) {
     if (!path) return;
     if (!forcedReadOnly) {
@@ -384,8 +393,34 @@
       [path]: {
         readOnlyReason,
         lockedByApp,
+        intentionalReadOnly,
       },
     };
+  }
+
+  function loadOpenModePreference() {
+    try {
+      strictReadOnlyOpenMode =
+        localStorage.getItem(OPEN_MODE_STORAGE_KEY) === "true";
+    } catch {
+      strictReadOnlyOpenMode = false;
+    }
+  }
+
+  function saveOpenModePreference() {
+    try {
+      localStorage.setItem(
+        OPEN_MODE_STORAGE_KEY,
+        strictReadOnlyOpenMode ? "true" : "false"
+      );
+    } catch {
+      // ignore localStorage failures
+    }
+  }
+
+  function setStrictReadOnlyOpenMode(enabled: boolean) {
+    strictReadOnlyOpenMode = enabled;
+    saveOpenModePreference();
   }
 
   async function toggleDatabaseLock() {
@@ -725,6 +760,7 @@
     prettyPrintJson = false;
     dbLocked = false;
     dbForcedReadOnly = false;
+    dbIntentionalReadOnly = false;
     dbReadOnlyReason = "";
     dbLockedByApp = "";
     keys = [];
@@ -773,6 +809,7 @@
     dbLocked = getDatabaseLocked(dbPath);
     const forcedState = getForcedReadOnlyState(dbPath);
     dbForcedReadOnly = Boolean(forcedState);
+    dbIntentionalReadOnly = Boolean(forcedState?.intentionalReadOnly);
     dbReadOnlyReason = forcedState?.readOnlyReason ?? "";
     dbLockedByApp = forcedState?.lockedByApp ?? "";
     if (!dbForcedReadOnly) {
@@ -852,7 +889,10 @@
     await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
   }
 
-  async function openDatabaseFromPath(path: string) {
+  async function openDatabaseFromPath(
+    path: string,
+    strictReadOnlyNoLock = false
+  ) {
     if (!path || path.trim() === "" || isOpeningDatabase) return;
 
     isOpeningDatabase = true;
@@ -860,7 +900,7 @@
 
     try {
       const result: OpenDatabaseResult =
-        await LevelDBService.OpenDatabase(path);
+        await LevelDBService.OpenDatabase(path, strictReadOnlyNoLock);
       if (result.ok) {
         const canonicalPath = result.canonicalPath || path;
         const forcedReadOnly = Boolean(result.forcedReadOnly);
@@ -868,7 +908,8 @@
           canonicalPath,
           forcedReadOnly,
           result.readOnlyReason || "",
-          result.lockedByApp || ""
+          result.lockedByApp || "",
+          Boolean(result.intentionalReadOnly)
         );
         addToRecent(canonicalPath);
         const activeTab = getActiveTab();
@@ -950,7 +991,7 @@
       // OpenFile returns string or string[] depending on options; for single dir it's a string
       const selectedPath = Array.isArray(path) ? path[0] : path;
       if (selectedPath) {
-        await openDatabaseFromPath(selectedPath);
+        await openDatabaseFromPath(selectedPath, strictReadOnlyOpenMode);
       }
     } catch (err) {
       console.error("Dialog error:", err);
@@ -1023,10 +1064,12 @@
         canonicalPath,
         forcedReadOnly,
         refreshResult.readOnlyReason || "",
-        refreshResult.lockedByApp || ""
+        refreshResult.lockedByApp || "",
+        Boolean(refreshResult.intentionalReadOnly)
       );
       if (canonicalPath === dbPath) {
         dbForcedReadOnly = forcedReadOnly;
+        dbIntentionalReadOnly = Boolean(refreshResult.intentionalReadOnly);
         dbReadOnlyReason = refreshResult.readOnlyReason || "";
         dbLockedByApp = refreshResult.lockedByApp || "";
       }
@@ -1451,6 +1494,7 @@
   // Init
   loadRecentPaths();
   loadValueFormatPrefs();
+  loadOpenModePreference();
 </script>
 
 {#if dbPath}
@@ -1774,10 +1818,13 @@
         >
           <p class="font-medium">Opened in strict read-only mode.</p>
           <p class="mt-0.5 text-xs opacity-90">
-            {dbReadOnlyReason ||
-              "This database is currently in use by another application, so editing is disabled."}
+            {dbIntentionalReadOnly
+              ? dbReadOnlyReason ||
+                "This database was opened in strict read-only mode without taking a lock, so editing is disabled."
+              : dbReadOnlyReason ||
+                "This database is currently in use by another application, so editing is disabled."}
           </p>
-          {#if showLockedByAppInReadOnlyNotice}
+          {#if !dbIntentionalReadOnly && showLockedByAppInReadOnlyNotice}
             <p class="mt-0.5 text-xs opacity-90">In use by: {dbLockedByApp}</p>
           {/if}
         </div>
@@ -2234,6 +2281,43 @@
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
+          <section class="space-y-2">
+            <h2 class="text-sm font-medium text-muted-foreground">Open mode</h2>
+            <div class="inline-flex items-center rounded-md border border-border bg-background p-0.5">
+              <button
+                type="button"
+                class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
+                  !strictReadOnlyOpenMode
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-pressed={!strictReadOnlyOpenMode}
+                on:click={() => {
+                  setStrictReadOnlyOpenMode(false);
+                }}
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
+                  strictReadOnlyOpenMode
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-pressed={strictReadOnlyOpenMode}
+                on:click={() => {
+                  setStrictReadOnlyOpenMode(true);
+                }}
+              >
+                Strict read-only (no lock)
+              </button>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              Strict mode opens without locking, so another app can still lock the database later.
+            </p>
+          </section>
+
           <Button
             class="gap-2"
             on:click={openDatabaseFromDialog}
@@ -2257,24 +2341,35 @@
               </h2>
               <div class="space-y-2">
                 {#each recentPaths as item}
-                  <div class="group relative">
+                  <div class="group flex items-center gap-1">
                     <Button
                       variant="ghost"
-                      class="w-full justify-start pr-10 font-normal"
-                      on:click={() => openDatabaseFromPath(item.path)}
+                      class="min-w-0 flex-1 justify-start font-normal"
+                      on:click={() => openDatabaseFromPath(item.path, false)}
                       title={item.path}
                       disabled={isOpeningDatabase}
                     >
                       {item.label}
                     </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      title="Open in strict read-only mode (no lock)"
+                      on:click={() => openDatabaseFromPath(item.path, true)}
+                      disabled={isOpeningDatabase}
+                    >
+                      RO
+                    </Button>
+
                     <Button
                       variant="ghost"
                       size="icon"
-                      class="absolute right-1 top-1 h-7 w-7 opacity-0 transition-opacity pointer-events-none text-muted-foreground hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                      class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
                       aria-label={`Remove ${item.label} from recently opened`}
                       title="Remove from recently opened"
-                      on:click={(event) => {
-                        event.stopPropagation();
+                      on:click={() => {
                         removeFromRecent(item.path);
                       }}
                       disabled={isOpeningDatabase}

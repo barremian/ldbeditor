@@ -2262,6 +2262,7 @@
                       variant="ghost"
                       class="w-full justify-start pr-10 font-normal"
                       on:click={() => openDatabaseFromPath(item.path)}
+                      title={item.path}
                       disabled={isOpeningDatabase}
                     >
                       {item.label}

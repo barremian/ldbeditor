@@ -1695,8 +1695,10 @@
       class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2 md:grid-cols-1"
       aria-busy={showEditorLoadingOverlay}
       style={isDesktopLayout
-        ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
-        : undefined}
+        ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);${dbForcedReadOnly ? " grid-template-rows: auto 1fr;" : ""}`
+        : dbForcedReadOnly
+          ? "grid-template-rows: auto 1fr 1fr;"
+          : undefined}
     >
       {#if isDesktopLayout}
         <button

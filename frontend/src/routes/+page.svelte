@@ -1671,8 +1671,12 @@
               >
                 <button
                   type="button"
-                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                    dbLocked ? "bg-muted/80" : ""
+                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors ${
+                    dbForcedReadOnly
+                      ? "cursor-not-allowed text-muted-foreground opacity-70"
+                      : "hover:bg-muted"
+                  } ${
+                    dbLocked && !dbForcedReadOnly ? "bg-muted/80" : ""
                   }`}
                   role="menuitemcheckbox"
                   aria-checked={dbLocked}
@@ -1685,14 +1689,18 @@
                   <span>Read-only</span>
                   <span
                     class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-                      dbLocked
+                      dbForcedReadOnly
+                        ? "border-border/60 bg-muted/80"
+                        : dbLocked
                         ? "border-primary/40 bg-primary"
                         : "border-border bg-muted"
                     }`}
                     aria-hidden="true"
                   >
                     <span
-                      class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+                      class={`inline-block h-4 w-4 rounded-full shadow-sm transition-transform ${
+                        dbForcedReadOnly ? "bg-muted-foreground/30" : "bg-background"
+                      } ${
                         dbLocked ? "translate-x-4" : "translate-x-0.5"
                       }`}
                     ></span>

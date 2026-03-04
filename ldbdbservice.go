@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -420,12 +421,24 @@ func isLevelDBLockError(err error) bool {
 		return true
 	}
 
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "already locked") ||
-		strings.Contains(message, "resource temporarily unavailable") ||
-		strings.Contains(message, "being used by another process") ||
-		strings.Contains(message, "sharing violation") ||
-		strings.Contains(message, "cannot access the file")
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		// Unix-like systems: EAGAIN and EWOULDBLOCK indicate resource temporarily unavailable,
+		// EACCES indicates permission denied (file may be locked by another process)
+		if errno == syscall.EAGAIN || errno == syscall.EACCES || errno == syscall.EWOULDBLOCK {
+			return true
+		}
+		// Windows: ERROR_SHARING_VIOLATION (32) and ERROR_LOCK_VIOLATION (33)
+		const (
+			ERROR_SHARING_VIOLATION = 32
+			ERROR_LOCK_VIOLATION    = 33
+		)
+		if errno == syscall.Errno(ERROR_SHARING_VIOLATION) || errno == syscall.Errno(ERROR_LOCK_VIOLATION) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func openDatabaseHandle(canonicalPath string) (*openedDB, error) {

@@ -51,11 +51,11 @@ export function GetValue(path: string, keyDisplay: string): $CancellablePromise<
 
 /**
  * OpenDatabase opens a LevelDB database at the given path.
- * Set strictReadOnlyNoLock=true to intentionally open in strict read-only mode without taking the LOCK file.
+ * Set readOnly=true to intentionally open in read-only mode without taking the LOCK file.
  * Returns Ok=true on success, Ok=false with Error set when the path is not a valid LevelDB database.
  */
-export function OpenDatabase(path: string, strictReadOnlyNoLock: boolean): $CancellablePromise<$models.OpenDatabaseResult> {
-    return $Call.ByID(1785735212, path, strictReadOnlyNoLock).then(($result: any) => {
+export function OpenDatabase(path: string, readOnly: boolean): $CancellablePromise<$models.OpenDatabaseResult> {
+    return $Call.ByID(1785735212, path, readOnly).then(($result: any) => {
         return $$createType1($result);
     });
 }
@@ -93,13 +93,6 @@ export function RefreshDatabase(path: string): $CancellablePromise<$models.OpenD
  */
 export function RenameKey(path: string, oldKeyDisplay: string, newKeyDisplay: string): $CancellablePromise<void> {
     return $Call.ByID(2279504418, path, oldKeyDisplay, newKeyDisplay);
-}
-
-/**
- * SetDatabaseLocked sets whether write operations are blocked for the open database.
- */
-export function SetDatabaseLocked(path: string, locked: boolean): $CancellablePromise<void> {
-    return $Call.ByID(659892384, path, locked);
 }
 
 // Private type creation functions

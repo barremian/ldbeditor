@@ -27,7 +27,6 @@ type LevelDBService struct {
 
 type dbEntry struct {
 	db                  *leveldb.DB
-	dbLocked            bool
 	forcedReadOnly      bool
 	intentionalReadOnly bool
 	readOnlyReason      string
@@ -43,7 +42,6 @@ type openedDB struct {
 	lockedByApp         string
 }
 
-var errDatabaseLocked = errors.New("database is locked")
 var errDatabaseForcedReadOnly = errors.New("database is open read-only because it is locked by another application")
 
 // OpenDatabaseResult is the result of opening a LevelDB database.
@@ -68,9 +66,9 @@ type PutValueIfUnchangedResult struct {
 }
 
 // OpenDatabase opens a LevelDB database at the given path.
-// Set strictReadOnlyNoLock=true to intentionally open in strict read-only mode without taking the LOCK file.
+// Set readOnly=true to intentionally open in read-only mode without taking the LOCK file.
 // Returns Ok=true on success, Ok=false with Error set when the path is not a valid LevelDB database.
-func (s *LevelDBService) OpenDatabase(path string, strictReadOnlyNoLock bool) OpenDatabaseResult {
+func (s *LevelDBService) OpenDatabase(path string, readOnly bool) OpenDatabaseResult {
 	canonicalPath, err := canonicalizePath(path)
 	if err != nil {
 		return OpenDatabaseResult{Ok: false, Error: err.Error()}
@@ -89,7 +87,7 @@ func (s *LevelDBService) OpenDatabase(path string, strictReadOnlyNoLock bool) Op
 			Ok:                  true,
 			CanonicalPath:       canonicalPath,
 			AlreadyOpen:         true,
-			ReadOnly:            existing.dbLocked || existing.forcedReadOnly,
+			ReadOnly:            existing.forcedReadOnly,
 			ForcedReadOnly:      existing.forcedReadOnly,
 			IntentionalReadOnly: existing.intentionalReadOnly,
 			ReadOnlyReason:      existing.readOnlyReason,
@@ -97,14 +95,13 @@ func (s *LevelDBService) OpenDatabase(path string, strictReadOnlyNoLock bool) Op
 		}
 	}
 
-	opened, openErr := openDatabaseHandle(canonicalPath, strictReadOnlyNoLock)
+	opened, openErr := openDatabaseHandle(canonicalPath, readOnly)
 	if openErr != nil {
 		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
 	}
 
 	s.dbs[canonicalPath] = &dbEntry{
 		db:                  opened.db,
-		dbLocked:            false,
 		forcedReadOnly:      opened.forcedReadOnly,
 		intentionalReadOnly: opened.intentionalReadOnly,
 		readOnlyReason:      opened.readOnlyReason,
@@ -130,7 +127,6 @@ func (s *LevelDBService) RefreshDatabase(path string) (OpenDatabaseResult, error
 	}
 
 	refCount := entry.refCount
-	dbLocked := entry.dbLocked
 	intentionalReadOnly := entry.intentionalReadOnly
 	if closeErr := entry.db.Close(); closeErr != nil {
 		return OpenDatabaseResult{}, closeErr
@@ -144,7 +140,6 @@ func (s *LevelDBService) RefreshDatabase(path string) (OpenDatabaseResult, error
 
 	s.dbs[canonicalPath] = &dbEntry{
 		db:                  opened.db,
-		dbLocked:            dbLocked,
 		forcedReadOnly:      opened.forcedReadOnly,
 		intentionalReadOnly: opened.intentionalReadOnly,
 		readOnlyReason:      opened.readOnlyReason,
@@ -339,25 +334,6 @@ func (s *LevelDBService) RenameKey(path string, oldKeyDisplay string, newKeyDisp
 	return db.Write(batch, nil)
 }
 
-// SetDatabaseLocked sets whether write operations are blocked for the open database.
-func (s *LevelDBService) SetDatabaseLocked(path string, locked bool) error {
-	canonicalPath, err := canonicalizePath(path)
-	if err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	entry, ok := s.dbs[canonicalPath]
-	if !ok {
-		return errors.New("database is not open")
-	}
-
-	entry.dbLocked = locked
-	return nil
-}
-
 // CloseDatabase releases one open reference for a database path and closes the DB when refcount reaches zero.
 func (s *LevelDBService) CloseDatabase(path string) error {
 	canonicalPath, err := canonicalizePath(path)
@@ -415,9 +391,6 @@ func (s *LevelDBService) writableDatabase(path string) (*leveldb.DB, error) {
 	if entry.forcedReadOnly {
 		return nil, errDatabaseForcedReadOnly
 	}
-	if entry.dbLocked {
-		return nil, errDatabaseLocked
-	}
 	return entry.db, nil
 }
 
@@ -449,8 +422,8 @@ func isLevelDBLockError(err error) bool {
 	return false
 }
 
-func openDatabaseHandle(canonicalPath string, strictReadOnlyNoLock bool) (*openedDB, error) {
-	if strictReadOnlyNoLock {
+func openDatabaseHandle(canonicalPath string, readOnly bool) (*openedDB, error) {
+	if readOnly {
 		readOnlyDB, readOnlyErr := openLevelDBReadOnlyNoLock(canonicalPath)
 		if readOnlyErr != nil {
 			return nil, readOnlyErr
@@ -460,7 +433,7 @@ func openDatabaseHandle(canonicalPath string, strictReadOnlyNoLock bool) (*opene
 			db:                  readOnlyDB,
 			forcedReadOnly:      true,
 			intentionalReadOnly: true,
-			readOnlyReason:      "Opened intentionally in strict read-only mode (no lock).",
+			readOnlyReason:      "Opened intentionally in read-only mode (no lock).",
 			lockedByApp:         "",
 		}, nil
 	}
@@ -505,7 +478,7 @@ func openResultFromEntry(canonicalPath string, alreadyOpen bool, entry *dbEntry)
 		Ok:                  true,
 		CanonicalPath:       canonicalPath,
 		AlreadyOpen:         alreadyOpen,
-		ReadOnly:            entry.dbLocked || entry.forcedReadOnly,
+		ReadOnly:            entry.forcedReadOnly,
 		ForcedReadOnly:      entry.forcedReadOnly,
 		IntentionalReadOnly: entry.intentionalReadOnly,
 		ReadOnlyReason:      entry.readOnlyReason,

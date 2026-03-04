@@ -33,7 +33,7 @@
 
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
-  const OPEN_MODE_STORAGE_KEY = "database-open-mode-strict-readonly";
+  const OPEN_MODE_STORAGE_KEY = "database-open-mode-readonly";
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
   const VALUE_FORMAT_PREFS_STORAGE_KEY = "value-format-preferences";
   const KEY_SEARCH_DEBOUNCE_MS = 300;
@@ -117,12 +117,11 @@
   let refreshRequestId = 0;
   let valueRequestId = 0;
   let prettyPrintJson = false;
-  let dbLocked = false;
   let dbForcedReadOnly = false;
   let dbIntentionalReadOnly = false;
   let dbReadOnlyReason = "";
   let dbLockedByApp = "";
-  let strictReadOnlyOpenMode = false;
+  let readOnlyOpenMode = false;
   let showLockedByAppInReadOnlyNotice = false;
   let forcedReadOnlyByDatabase: Record<
     string,
@@ -133,10 +132,8 @@
     }
   > = {};
   let effectiveReadOnly = false;
-  let valueFormatPrefsByDatabase: Record<
-    string,
-    { prettyPrintJson: boolean; dbLocked: boolean }
-  > = {};
+  let valueFormatPrefsByDatabase: Record<string, { prettyPrintJson: boolean }> =
+    {};
 
   type TabViewState = {
     keys: string[];
@@ -229,7 +226,7 @@
     : keys;
   $: scheduleDebouncedKeySearch(keySearchInput);
   $: autoRefreshLabel = getAutoRefreshLabel(autoRefreshIntervalMs);
-  $: effectiveReadOnly = dbLocked || dbForcedReadOnly;
+  $: effectiveReadOnly = dbForcedReadOnly;
   $: showLockedByAppInReadOnlyNotice =
     Boolean(dbLockedByApp.trim()) &&
     !dbReadOnlyReason.toLowerCase().includes(dbLockedByApp.toLowerCase());
@@ -299,7 +296,7 @@
       }
       const parsed = JSON.parse(stored) as Record<
         string,
-        { prettyPrintJson?: unknown; dbLocked?: unknown }
+        { prettyPrintJson?: unknown }
       >;
       valueFormatPrefsByDatabase = Object.entries(parsed ?? {}).reduce(
         (acc, [path, preference]) => {
@@ -308,11 +305,10 @@
           }
           acc[path] = {
             prettyPrintJson: Boolean(preference.prettyPrintJson),
-            dbLocked: Boolean(preference.dbLocked),
           };
           return acc;
         },
-        {} as Record<string, { prettyPrintJson: boolean; dbLocked: boolean }>
+        {} as Record<string, { prettyPrintJson: boolean }>
       );
     } catch {
       valueFormatPrefsByDatabase = {};
@@ -334,10 +330,6 @@
     return Boolean(valueFormatPrefsByDatabase[path]?.prettyPrintJson);
   }
 
-  function getDatabaseLocked(path: string): boolean {
-    return Boolean(valueFormatPrefsByDatabase[path]?.dbLocked);
-  }
-
   function getForcedReadOnlyState(path: string): {
     readOnlyReason: string;
     lockedByApp: string;
@@ -355,20 +347,6 @@
       ...valueFormatPrefsByDatabase,
       [path]: {
         prettyPrintJson: enabled,
-        dbLocked: Boolean(existing?.dbLocked),
-      },
-    };
-    saveValueFormatPrefs();
-  }
-
-  function setDatabaseLocked(path: string, locked: boolean) {
-    if (!path) return;
-    const existing = valueFormatPrefsByDatabase[path];
-    valueFormatPrefsByDatabase = {
-      ...valueFormatPrefsByDatabase,
-      [path]: {
-        prettyPrintJson: Boolean(existing?.prettyPrintJson),
-        dbLocked: locked,
       },
     };
     saveValueFormatPrefs();
@@ -400,10 +378,9 @@
 
   function loadOpenModePreference() {
     try {
-      strictReadOnlyOpenMode =
-        localStorage.getItem(OPEN_MODE_STORAGE_KEY) === "true";
+      readOnlyOpenMode = localStorage.getItem(OPEN_MODE_STORAGE_KEY) === "true";
     } catch {
-      strictReadOnlyOpenMode = false;
+      readOnlyOpenMode = false;
     }
   }
 
@@ -411,41 +388,16 @@
     try {
       localStorage.setItem(
         OPEN_MODE_STORAGE_KEY,
-        strictReadOnlyOpenMode ? "true" : "false"
+        readOnlyOpenMode ? "true" : "false"
       );
     } catch {
       // ignore localStorage failures
     }
   }
 
-  function setStrictReadOnlyOpenMode(enabled: boolean) {
-    strictReadOnlyOpenMode = enabled;
+  function setReadOnlyOpenMode(enabled: boolean) {
+    readOnlyOpenMode = enabled;
     saveOpenModePreference();
-  }
-
-  async function toggleDatabaseLock() {
-    if (!dbPath || dbForcedReadOnly) return;
-    const nextLocked = !dbLocked;
-
-    try {
-      await LevelDBService.SetDatabaseLocked(dbPath, nextLocked);
-      dbLocked = nextLocked;
-      setDatabaseLocked(dbPath, nextLocked);
-
-      if (nextLocked) {
-        showCreateForm = false;
-        resetRenameForm();
-        keyPendingDelete = null;
-        if (isValueEditing) {
-          revertValueChanges();
-        }
-      }
-    } catch (err) {
-      await Dialogs.Error({
-        Title: "Database lock update failed",
-        Message: err instanceof Error ? err.message : String(err),
-      });
-    }
   }
 
   function togglePrettyPrintJson() {
@@ -758,7 +710,6 @@
     stopAutoRefresh();
     dbPath = "";
     prettyPrintJson = false;
-    dbLocked = false;
     dbForcedReadOnly = false;
     dbIntentionalReadOnly = false;
     dbReadOnlyReason = "";
@@ -806,15 +757,11 @@
 
     dbPath = nextTab.path;
     prettyPrintJson = getPrettyPrintEnabled(dbPath);
-    dbLocked = getDatabaseLocked(dbPath);
     const forcedState = getForcedReadOnlyState(dbPath);
     dbForcedReadOnly = Boolean(forcedState);
     dbIntentionalReadOnly = Boolean(forcedState?.intentionalReadOnly);
     dbReadOnlyReason = forcedState?.readOnlyReason ?? "";
     dbLockedByApp = forcedState?.lockedByApp ?? "";
-    if (!dbForcedReadOnly) {
-      await LevelDBService.SetDatabaseLocked(dbPath, dbLocked);
-    }
     const saved = tabStateMap[tabId];
     if (saved) {
       const savedScrollTop = restoreTabState(saved);
@@ -889,18 +836,17 @@
     await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
   }
 
-  async function openDatabaseFromPath(
-    path: string,
-    strictReadOnlyNoLock = false
-  ) {
+  async function openDatabaseFromPath(path: string, readOnly = false) {
     if (!path || path.trim() === "" || isOpeningDatabase) return;
 
     isOpeningDatabase = true;
     errorMessage = "";
 
     try {
-      const result: OpenDatabaseResult =
-        await LevelDBService.OpenDatabase(path, strictReadOnlyNoLock);
+      const result: OpenDatabaseResult = await LevelDBService.OpenDatabase(
+        path,
+        readOnly
+      );
       if (result.ok) {
         const canonicalPath = result.canonicalPath || path;
         const forcedReadOnly = Boolean(result.forcedReadOnly);
@@ -991,7 +937,7 @@
       // OpenFile returns string or string[] depending on options; for single dir it's a string
       const selectedPath = Array.isArray(path) ? path[0] : path;
       if (selectedPath) {
-        await openDatabaseFromPath(selectedPath, strictReadOnlyOpenMode);
+        await openDatabaseFromPath(selectedPath, readOnlyOpenMode);
       }
     } catch (err) {
       console.error("Dialog error:", err);
@@ -1584,9 +1530,6 @@
               <Database class="mr-1.5 h-3.5 w-3.5" />
               {dbPath.split(/[/\\]/).pop() || dbPath}
             </Badge>
-            {#if dbLocked && !dbForcedReadOnly}
-              <Badge variant="outline">Read-only</Badge>
-            {/if}
             {#if autoRefreshIntervalMs > 0}
               <Badge variant="outline">Auto {autoRefreshLabel}</Badge>
             {/if}
@@ -1695,8 +1638,8 @@
               variant="outline"
               size="icon"
               class="h-8 w-8"
-              title="View and safety settings"
-              aria-label="View and safety settings"
+              title="View settings"
+              aria-label="View settings"
               aria-haspopup="menu"
               aria-expanded={isViewMenuOpen}
               on:click={() => {
@@ -1711,45 +1654,8 @@
               <div
                 class="absolute right-0 top-10 z-50 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
                 role="menu"
-                aria-label="View and safety settings"
+                aria-label="View settings"
               >
-                <button
-                  type="button"
-                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors ${
-                    dbForcedReadOnly
-                      ? "cursor-not-allowed text-muted-foreground opacity-70"
-                      : "hover:bg-muted"
-                  } ${
-                    dbLocked && !dbForcedReadOnly ? "bg-muted/80" : ""
-                  }`}
-                  role="menuitemcheckbox"
-                  aria-checked={dbLocked}
-                  disabled={dbForcedReadOnly}
-                  on:click={() => {
-                    if (dbForcedReadOnly) return;
-                    void toggleDatabaseLock();
-                  }}
-                >
-                  <span>Read-only</span>
-                  <span
-                    class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-                      dbForcedReadOnly
-                        ? "border-border/60 bg-muted/80"
-                        : dbLocked
-                        ? "border-primary/40 bg-primary"
-                        : "border-border bg-muted"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    <span
-                      class={`inline-block h-4 w-4 rounded-full shadow-sm transition-transform ${
-                        dbForcedReadOnly ? "bg-muted-foreground/30" : "bg-background"
-                      } ${
-                        dbLocked ? "translate-x-4" : "translate-x-0.5"
-                      }`}
-                    ></span>
-                  </span>
-                </button>
                 <button
                   type="button"
                   class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
@@ -1816,11 +1722,11 @@
           role="status"
           aria-live="polite"
         >
-          <p class="font-medium">Opened in strict read-only mode.</p>
+          <p class="font-medium">Opened in read-only mode.</p>
           <p class="mt-0.5 text-xs opacity-90">
             {dbIntentionalReadOnly
               ? dbReadOnlyReason ||
-                "This database was opened in strict read-only mode without taking a lock, so editing is disabled."
+                "This database was opened in read-only mode without taking a lock, so editing is disabled."
               : dbReadOnlyReason ||
                 "This database is currently in use by another application, so editing is disabled."}
           </p>
@@ -2134,45 +2040,65 @@
         <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
           <div class="relative flex min-h-0 flex-1 flex-col">
             {#if selectedKey === null}
-              <div class="px-1 py-3 text-sm text-muted-foreground">Select a key</div>
-            {:else}
-              {#if showValueLoadingOverlay}
+              <div class="px-1 py-3 text-sm text-muted-foreground">
+                Select a key
+              </div>
+            {:else if showValueLoadingOverlay}
+              <div
+                class="flex h-full min-h-0 flex-1 flex-col rounded-md border border-border/70 bg-muted/20 p-3"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="sr-only">Loading value…</span>
                 <div
-                  class="flex h-full min-h-0 flex-1 flex-col rounded-md border border-border/70 bg-muted/20 p-3"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span class="sr-only">Loading value…</span>
-                  <div class="mb-3 h-3 w-40 rounded bg-muted/80 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                  <div class="space-y-2.5" aria-hidden="true">
-                    <div class="h-3 w-full rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[95%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[88%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[92%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[83%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[90%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[72%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[86%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                    <div class="h-3 w-[65%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"></div>
-                  </div>
+                  class="mb-3 h-3 w-40 rounded bg-muted/80 motion-safe:animate-pulse motion-reduce:animate-none"
+                ></div>
+                <div class="space-y-2.5" aria-hidden="true">
+                  <div
+                    class="h-3 w-full rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[95%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[88%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[92%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[83%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[90%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[72%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[86%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div
+                    class="h-3 w-[65%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
                 </div>
-              {:else}
-                <textarea
-                  class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
-                    isValueEditing
-                      ? "bg-background text-foreground focus-visible:border-primary"
-                      : "bg-muted/50 text-foreground"
-                  }`}
-                  bind:value={editorValue}
-                  on:input={handleValueInput}
-                  readonly={!isValueEditing || isSaving || effectiveReadOnly}
-                  spellcheck="false"
-                ></textarea>
-                {#if valueValidationError}
-                  <p class="px-1 text-xs text-destructive">
-                    {valueValidationError}
-                  </p>
-                {/if}
+              </div>
+            {:else}
+              <textarea
+                class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                  isValueEditing
+                    ? "bg-background text-foreground focus-visible:border-primary"
+                    : "bg-muted/50 text-foreground"
+                }`}
+                bind:value={editorValue}
+                on:input={handleValueInput}
+                readonly={!isValueEditing || isSaving || effectiveReadOnly}
+                spellcheck="false"
+              ></textarea>
+              {#if valueValidationError}
+                <p class="px-1 text-xs text-destructive">
+                  {valueValidationError}
+                </p>
               {/if}
             {/if}
           </div>
@@ -2283,17 +2209,19 @@
         <CardContent class="space-y-6">
           <section class="space-y-2">
             <h2 class="text-sm font-medium text-muted-foreground">Open mode</h2>
-            <div class="inline-flex items-center rounded-md border border-border bg-background p-0.5">
+            <div
+              class="inline-flex items-center rounded-md border border-border bg-background p-0.5"
+            >
               <button
                 type="button"
                 class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
-                  !strictReadOnlyOpenMode
+                  !readOnlyOpenMode
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-                aria-pressed={!strictReadOnlyOpenMode}
+                aria-pressed={!readOnlyOpenMode}
                 on:click={() => {
-                  setStrictReadOnlyOpenMode(false);
+                  setReadOnlyOpenMode(false);
                 }}
               >
                 Normal
@@ -2301,20 +2229,21 @@
               <button
                 type="button"
                 class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
-                  strictReadOnlyOpenMode
+                  readOnlyOpenMode
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-                aria-pressed={strictReadOnlyOpenMode}
+                aria-pressed={readOnlyOpenMode}
                 on:click={() => {
-                  setStrictReadOnlyOpenMode(true);
+                  setReadOnlyOpenMode(true);
                 }}
               >
-                Strict read-only (no lock)
+                Read-only
               </button>
             </div>
             <p class="text-xs text-muted-foreground">
-              Strict mode opens without locking, so another app can still lock the database later.
+              Read-only mode opens without locking, so another app can still
+              lock the database later.
             </p>
           </section>
 
@@ -2356,7 +2285,7 @@
                       variant="ghost"
                       size="sm"
                       class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      title="Open in strict read-only mode (no lock)"
+                      title="Open in read-only mode (no lock)"
                       on:click={() => openDatabaseFromPath(item.path, true)}
                       disabled={isOpeningDatabase}
                     >

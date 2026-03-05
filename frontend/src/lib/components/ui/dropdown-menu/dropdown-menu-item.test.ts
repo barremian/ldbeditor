@@ -6,6 +6,20 @@ afterEach(() => {
   cleanup();
 });
 
+async function openActionsMenuAndGetItem(
+  getByRole: (role: string, options?: Record<string, unknown>) => HTMLElement,
+  findByRole: (
+    role: string,
+    options?: Record<string, unknown>
+  ) => Promise<HTMLElement>
+) {
+  await fireEvent.click(getByRole("button", { name: "Open actions" }));
+
+  return findByRole("menuitem", {
+    name: "Open in read-only mode",
+  });
+}
+
 describe("DropdownMenuItem wrapper", () => {
   it("forwards click events to consumers", async () => {
     const onItemClick = vi.fn();
@@ -14,11 +28,7 @@ describe("DropdownMenuItem wrapper", () => {
       onItemClick,
     });
 
-    await fireEvent.click(getByRole("button", { name: "Open actions" }));
-
-    const item = await findByRole("menuitem", {
-      name: "Open in read-only mode",
-    });
+    const item = await openActionsMenuAndGetItem(getByRole, findByRole);
 
     await fireEvent.click(item);
 
@@ -32,11 +42,7 @@ describe("DropdownMenuItem wrapper", () => {
       onItemClick,
     });
 
-    await fireEvent.click(getByRole("button", { name: "Open actions" }));
-
-    const item = await findByRole("menuitem", {
-      name: "Open in read-only mode",
-    });
+    const item = await openActionsMenuAndGetItem(getByRole, findByRole);
 
     item.focus();
     await fireEvent.keyDown(item, { key: "Enter" });
@@ -51,11 +57,7 @@ describe("DropdownMenuItem wrapper", () => {
       onItemClick,
     });
 
-    await fireEvent.click(getByRole("button", { name: "Open actions" }));
-
-    const item = await findByRole("menuitem", {
-      name: "Open in read-only mode",
-    });
+    const item = await openActionsMenuAndGetItem(getByRole, findByRole);
 
     item.focus();
     await fireEvent.keyDown(item, { key: " " });

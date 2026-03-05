@@ -35,7 +35,6 @@
 
   const RECENT_STORAGE_KEY = "recent-leveldb-paths";
   const MAX_RECENT = 10;
-  const OPEN_MODE_STORAGE_KEY = "database-open-mode-readonly";
   const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
   const VALUE_FORMAT_PREFS_STORAGE_KEY = "value-format-preferences";
   const KEY_SEARCH_DEBOUNCE_MS = 300;
@@ -123,7 +122,6 @@
   let dbIntentionalReadOnly = false;
   let dbReadOnlyReason = "";
   let dbLockedByApp = "";
-  let readOnlyOpenMode = false;
   let showLockedByAppInReadOnlyNotice = false;
   let forcedReadOnlyByDatabase: Record<
     string,
@@ -376,30 +374,6 @@
         intentionalReadOnly,
       },
     };
-  }
-
-  function loadOpenModePreference() {
-    try {
-      readOnlyOpenMode = localStorage.getItem(OPEN_MODE_STORAGE_KEY) === "true";
-    } catch {
-      readOnlyOpenMode = false;
-    }
-  }
-
-  function saveOpenModePreference() {
-    try {
-      localStorage.setItem(
-        OPEN_MODE_STORAGE_KEY,
-        readOnlyOpenMode ? "true" : "false"
-      );
-    } catch {
-      // ignore localStorage failures
-    }
-  }
-
-  function setReadOnlyOpenMode(enabled: boolean) {
-    readOnlyOpenMode = enabled;
-    saveOpenModePreference();
   }
 
   function togglePrettyPrintJson() {
@@ -928,7 +902,7 @@
     }
   }
 
-  async function openDatabaseFromDialog(overrideReadOnly?: boolean) {
+  async function openDatabaseFromDialog(readOnly?: boolean) {
     try {
       const path = await Dialogs.OpenFile({
         CanChooseDirectories: true,
@@ -939,10 +913,7 @@
       // OpenFile returns string or string[] depending on options; for single dir it's a string
       const selectedPath = Array.isArray(path) ? path[0] : path;
       if (selectedPath) {
-        await openDatabaseFromPath(
-          selectedPath,
-          overrideReadOnly ?? readOnlyOpenMode
-        );
+        await openDatabaseFromPath(selectedPath, readOnly ?? false);
       }
     } catch (err) {
       console.error("Dialog error:", err);
@@ -1445,7 +1416,6 @@
   // Init
   loadRecentPaths();
   loadValueFormatPrefs();
-  loadOpenModePreference();
 </script>
 
 {#if dbPath}
@@ -2214,46 +2184,6 @@
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <section class="space-y-2">
-            <h2 class="text-sm font-medium text-muted-foreground">Open mode</h2>
-            <div
-              class="inline-flex items-center rounded-md border border-border bg-background p-0.5"
-            >
-              <button
-                type="button"
-                class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
-                  !readOnlyOpenMode
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-pressed={!readOnlyOpenMode}
-                on:click={() => {
-                  setReadOnlyOpenMode(false);
-                }}
-              >
-                Normal
-              </button>
-              <button
-                type="button"
-                class={`rounded-sm px-2.5 py-1 text-sm transition-colors ${
-                  readOnlyOpenMode
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-pressed={readOnlyOpenMode}
-                on:click={() => {
-                  setReadOnlyOpenMode(true);
-                }}
-              >
-                Read-only
-              </button>
-            </div>
-            <p class="text-xs text-muted-foreground">
-              Read-only mode opens without locking, so another app can still
-              lock the database later.
-            </p>
-          </section>
-
           <SplitButton
             class="w-fit"
             disabled={isOpeningDatabase}

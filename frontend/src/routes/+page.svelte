@@ -587,9 +587,7 @@
       if (!editorSplitContainer) return;
       const containerRect = editorSplitContainer.getBoundingClientRect();
       const nextWidth =
-        moveEvent.clientX -
-        containerRect.left -
-        GRID_GAP_PX / 2;
+        moveEvent.clientX - containerRect.left - GRID_GAP_PX / 2;
       keyPaneWidth = clampKeyPaneWidth(nextWidth, containerRect.width);
     };
 
@@ -1694,7 +1692,6 @@
         ? "grid-template-rows: auto minmax(0, 1fr);"
         : "grid-template-rows: minmax(0, 1fr);"}
     >
-
       {#if dbForcedReadOnly}
         <div
           class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
@@ -1746,232 +1743,234 @@
             ? `min-width: ${MIN_KEY_PANE_WIDTH}px;`
             : undefined}
         >
-        <CardHeader class="space-y-3 pb-3">
-          <div class="flex items-center justify-between gap-2">
-            <CardTitle class="flex items-center gap-2 text-base">
-              <KeyRound class="h-4 w-4" />
-              Keys
-            </CardTitle>
-            <div class="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                class="gap-1.5"
-                disabled={effectiveReadOnly}
-                on:click={() => {
-                  showCreateForm = !showCreateForm;
-                  if (!showCreateForm) {
-                    newKeyInput = "";
-                    newValueInput = "";
-                  }
-                }}
-              >
-                <Plus class="h-3.5 w-3.5" />
-                New
-              </Button>
-            </div>
-          </div>
-          <CardDescription>
-            {#if keySearchInput.trim()}
-              {filteredKeys.length} of {keys.length} entries
-            {:else}
-              {keys.length} entries
-            {/if}
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
-          {#if showCreateForm}
-            <div
-              class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2"
-            >
-              <input
-                class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-                placeholder="New key (text or 0x...)"
-                bind:value={newKeyInput}
-                disabled={isCreating || effectiveReadOnly}
-              />
-              {#if createKeyValidationError}
-                <p class="text-xs text-destructive">
-                  {createKeyValidationError}
-                </p>
-              {/if}
-              <textarea
-                class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
-                placeholder="Initial value (text or 0x...)"
-                bind:value={newValueInput}
-                disabled={isCreating || effectiveReadOnly}
-              ></textarea>
-              {#if createValueValidationError}
-                <p class="text-xs text-destructive">
-                  {createValueValidationError}
-                </p>
-              {/if}
+          <CardHeader class="space-y-3 pb-3">
+            <div class="flex items-center justify-between gap-2">
+              <CardTitle class="flex items-center gap-2 text-base">
+                <KeyRound class="h-4 w-4" />
+                Keys
+              </CardTitle>
               <div class="flex items-center gap-2">
                 <Button
+                  variant="outline"
                   size="sm"
                   class="gap-1.5"
-                  disabled={isCreating ||
-                    effectiveReadOnly ||
-                    !!createKeyValidationError ||
-                    !!createValueValidationError}
-                  on:click={createKey}
+                  disabled={effectiveReadOnly}
+                  on:click={() => {
+                    showCreateForm = !showCreateForm;
+                    if (!showCreateForm) {
+                      newKeyInput = "";
+                      newValueInput = "";
+                    }
+                  }}
                 >
-                  <Save class="h-3.5 w-3.5" />
-                  {isCreating ? "Creating…" : "Create key"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  on:click={resetCreateForm}
-                  disabled={isCreating}
-                >
-                  Cancel
+                  <Plus class="h-3.5 w-3.5" />
+                  New
                 </Button>
               </div>
             </div>
-          {/if}
-
-          <div class="relative w-full">
-            <input
-              class="w-full rounded-md border border-input bg-background px-2 py-1.5 pr-8 text-sm transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
-              placeholder="Search keys..."
-              bind:value={keySearchInput}
-            />
-            {#if keySearchInput.length > 0}
-              <button
-                type="button"
-                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Clear search"
-                on:click={clearKeySearch}
-              >
-                <X class="h-3.5 w-3.5" />
-              </button>
-            {/if}
-          </div>
-
-          <div class="relative min-h-0 flex-1">
-            {#if keys.length === 0}
-              <div class="px-2 py-3 text-sm text-muted-foreground">
-                No keys yet. Use <strong>New</strong> to create your first key.
-              </div>
-            {:else if filteredKeys.length === 0}
-              <div class="px-2 py-3 text-sm text-muted-foreground">
-                No keys match "{keySearchInput.trim()}".
-              </div>
-            {:else}
+            <CardDescription>
+              {#if keySearchInput.trim()}
+                {filteredKeys.length} of {keys.length} entries
+              {:else}
+                {keys.length} entries
+              {/if}
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
+            {#if showCreateForm}
               <div
-                class="h-full min-h-0 overflow-auto rounded-md border border-border/70"
-                bind:this={keyListViewportEl}
-                on:scroll={handleKeyListScroll}
+                class="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2"
               >
-                <ul class="w-full space-y-1 p-2">
-                  {#each filteredKeys as key}
-                    <li class="group w-full">
-                      <div
-                        data-key-item-selected={selectedKey === key
-                          ? "true"
-                          : undefined}
-                        class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          selectedKey === key
-                            ? "bg-primary/15 text-primary"
-                            : "hover:bg-muted"
-                        }`}
-                      >
-                        {#if editingKey === key}
-                          <div class="min-w-0 flex-1">
-                            <input
-                              class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
-                              bind:this={renameInputElement}
-                              bind:value={renameInput}
-                              disabled={isRenaming || effectiveReadOnly}
-                              on:click|stopPropagation
-                              on:keydown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void renameEditingKey();
-                                }
-                              }}
-                            />
-                            {#if renameValidationError}
-                              <p class="mt-1 text-xs text-destructive">
-                                {renameValidationError}
-                              </p>
-                            {/if}
-                          </div>
-                          <div class="ml-1 flex shrink-0 items-center gap-0.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-7 w-7"
-                              disabled={isRenaming ||
-                                effectiveReadOnly ||
-                                !renameInput ||
-                                !!renameValidationError}
-                              on:click={(event) => {
-                                event.stopPropagation();
-                                void renameEditingKey();
-                              }}
-                            >
-                              <Check class="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-7 w-7"
-                              disabled={isRenaming || effectiveReadOnly}
-                              on:click={(event) => {
-                                event.stopPropagation();
-                                resetRenameForm();
-                              }}
-                            >
-                              <X class="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        {:else}
-                          <button
-                            class="min-w-0 flex-1 text-left"
-                            title={key}
-                            on:click={() => selectKey(key)}
-                          >
-                            <span class="block w-full truncate">{key}</span>
-                          </button>
-                          <div
-                            class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                          >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-7 w-7"
-                              disabled={effectiveReadOnly}
-                              on:click={(event) => {
-                                event.stopPropagation();
-                                startRename(key);
-                              }}
-                            >
-                              <Pencil class="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-7 w-7 text-destructive hover:text-destructive"
-                              disabled={isDeleting || effectiveReadOnly}
-                              on:click={(event) => {
-                                event.stopPropagation();
-                                requestDeleteKey(key);
-                              }}
-                            >
-                              <Trash2 class="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        {/if}
-                      </div>
-                    </li>
-                  {/each}
-                </ul>
+                <input
+                  class="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  placeholder="New key (text or 0x...)"
+                  bind:value={newKeyInput}
+                  disabled={isCreating || effectiveReadOnly}
+                />
+                {#if createKeyValidationError}
+                  <p class="text-xs text-destructive">
+                    {createKeyValidationError}
+                  </p>
+                {/if}
+                <textarea
+                  class="min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-sm"
+                  placeholder="Initial value (text or 0x...)"
+                  bind:value={newValueInput}
+                  disabled={isCreating || effectiveReadOnly}
+                ></textarea>
+                {#if createValueValidationError}
+                  <p class="text-xs text-destructive">
+                    {createValueValidationError}
+                  </p>
+                {/if}
+                <div class="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    class="gap-1.5"
+                    disabled={isCreating ||
+                      effectiveReadOnly ||
+                      !!createKeyValidationError ||
+                      !!createValueValidationError}
+                    on:click={createKey}
+                  >
+                    <Save class="h-3.5 w-3.5" />
+                    {isCreating ? "Creating…" : "Create key"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    on:click={resetCreateForm}
+                    disabled={isCreating}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             {/if}
-          </div>
-        </CardContent>
+
+            <div class="relative w-full">
+              <input
+                class="w-full rounded-md border border-input bg-background px-2 py-1.5 pr-8 text-sm transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
+                placeholder="Search keys..."
+                bind:value={keySearchInput}
+              />
+              {#if keySearchInput.length > 0}
+                <button
+                  type="button"
+                  class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Clear search"
+                  on:click={clearKeySearch}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              {/if}
+            </div>
+
+            <div class="relative min-h-0 flex-1">
+              {#if keys.length === 0}
+                <div class="px-2 py-3 text-sm text-muted-foreground">
+                  No keys yet. Use <strong>New</strong> to create your first key.
+                </div>
+              {:else if filteredKeys.length === 0}
+                <div class="px-2 py-3 text-sm text-muted-foreground">
+                  No keys match "{keySearchInput.trim()}".
+                </div>
+              {:else}
+                <div
+                  class="h-full min-h-0 overflow-auto rounded-md border border-border/70"
+                  bind:this={keyListViewportEl}
+                  on:scroll={handleKeyListScroll}
+                >
+                  <ul class="w-full space-y-1 p-2">
+                    {#each filteredKeys as key}
+                      <li class="group w-full">
+                        <div
+                          data-key-item-selected={selectedKey === key
+                            ? "true"
+                            : undefined}
+                          class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                            selectedKey === key
+                              ? "bg-primary/15 text-primary"
+                              : "hover:bg-muted"
+                          }`}
+                        >
+                          {#if editingKey === key}
+                            <div class="min-w-0 flex-1">
+                              <input
+                                class="h-7 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-0"
+                                bind:this={renameInputElement}
+                                bind:value={renameInput}
+                                disabled={isRenaming || effectiveReadOnly}
+                                on:click|stopPropagation
+                                on:keydown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    void renameEditingKey();
+                                  }
+                                }}
+                              />
+                              {#if renameValidationError}
+                                <p class="mt-1 text-xs text-destructive">
+                                  {renameValidationError}
+                                </p>
+                              {/if}
+                            </div>
+                            <div
+                              class="ml-1 flex shrink-0 items-center gap-0.5"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-7 w-7"
+                                disabled={isRenaming ||
+                                  effectiveReadOnly ||
+                                  !renameInput ||
+                                  !!renameValidationError}
+                                on:click={(event) => {
+                                  event.stopPropagation();
+                                  void renameEditingKey();
+                                }}
+                              >
+                                <Check class="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-7 w-7"
+                                disabled={isRenaming || effectiveReadOnly}
+                                on:click={(event) => {
+                                  event.stopPropagation();
+                                  resetRenameForm();
+                                }}
+                              >
+                                <X class="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          {:else}
+                            <button
+                              class="min-w-0 flex-1 text-left"
+                              title={key}
+                              on:click={() => selectKey(key)}
+                            >
+                              <span class="block w-full truncate">{key}</span>
+                            </button>
+                            <div
+                              class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-7 w-7"
+                                disabled={effectiveReadOnly}
+                                on:click={(event) => {
+                                  event.stopPropagation();
+                                  startRename(key);
+                                }}
+                              >
+                                <Pencil class="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-7 w-7 text-destructive hover:text-destructive"
+                                disabled={isDeleting || effectiveReadOnly}
+                                on:click={(event) => {
+                                  event.stopPropagation();
+                                  requestDeleteKey(key);
+                                }}
+                              >
+                                <Trash2 class="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          {/if}
+                        </div>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+            </div>
+          </CardContent>
         </Card>
 
         <Card
@@ -1981,146 +1980,146 @@
             : undefined}
           aria-busy={showValueLoadingOverlay}
         >
-        <CardHeader class="space-y-3 pb-3">
-          <div class="flex items-center justify-between gap-2">
-            <CardTitle class="flex items-center gap-2 text-base">
-              <FileText class="h-4 w-4" />
-              Value
-            </CardTitle>
-            <div class="flex items-center gap-2">
-              {#if isDirty}
-                <Badge variant="secondary">Unsaved</Badge>
-              {/if}
-              {#if isValueEditing}
-                <Button
-                  size="sm"
-                  class="gap-1.5"
-                  disabled={!selectedKey ||
-                    !isDirty ||
-                    !!valueValidationError ||
-                    isSaving ||
-                    effectiveReadOnly}
-                  on:click={saveValue}
-                >
-                  <Save class="h-3.5 w-3.5" />
-                  {isSaving ? "Saving…" : "Save"}
-                </Button>
+          <CardHeader class="space-y-3 pb-3">
+            <div class="flex items-center justify-between gap-2">
+              <CardTitle class="flex items-center gap-2 text-base">
+                <FileText class="h-4 w-4" />
+                Value
+              </CardTitle>
+              <div class="flex items-center gap-2">
+                {#if isDirty}
+                  <Badge variant="secondary">Unsaved</Badge>
+                {/if}
+                {#if isValueEditing}
+                  <Button
+                    size="sm"
+                    class="gap-1.5"
+                    disabled={!selectedKey ||
+                      !isDirty ||
+                      !!valueValidationError ||
+                      isSaving ||
+                      effectiveReadOnly}
+                    on:click={saveValue}
+                  >
+                    <Save class="h-3.5 w-3.5" />
+                    {isSaving ? "Saving…" : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="gap-1.5"
+                    disabled={isSaving}
+                    on:click={revertValueChanges}
+                  >
+                    <X class="h-3.5 w-3.5" />
+                    Cancel
+                  </Button>
+                {:else}
+                  <Button
+                    size="sm"
+                    class="gap-1.5"
+                    disabled={!selectedKey ||
+                      valueLoading ||
+                      isSaving ||
+                      effectiveReadOnly}
+                    on:click={startValueEdit}
+                  >
+                    <Pencil class="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                {/if}
                 <Button
                   variant="outline"
-                  size="sm"
-                  class="gap-1.5"
-                  disabled={isSaving}
-                  on:click={revertValueChanges}
+                  size="icon"
+                  disabled={!selectedKey || valueLoading || isSaving}
+                  on:click={copyValueToClipboard}
+                  title={hasCopiedValue ? "Copied" : "Copy value"}
+                  aria-label={hasCopiedValue ? "Copied" : "Copy value"}
                 >
-                  <X class="h-3.5 w-3.5" />
-                  Cancel
+                  {#if hasCopiedValue}
+                    <Check class="h-3.5 w-3.5" />
+                  {:else}
+                    <Copy class="h-3.5 w-3.5" />
+                  {/if}
                 </Button>
-              {:else}
-                <Button
-                  size="sm"
-                  class="gap-1.5"
-                  disabled={!selectedKey ||
-                    valueLoading ||
-                    isSaving ||
-                    effectiveReadOnly}
-                  on:click={startValueEdit}
-                >
-                  <Pencil class="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-              {/if}
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={!selectedKey || valueLoading || isSaving}
-                on:click={copyValueToClipboard}
-                title={hasCopiedValue ? "Copied" : "Copy value"}
-                aria-label={hasCopiedValue ? "Copied" : "Copy value"}
-              >
-                {#if hasCopiedValue}
-                  <Check class="h-3.5 w-3.5" />
-                {:else}
-                  <Copy class="h-3.5 w-3.5" />
-                {/if}
-              </Button>
+              </div>
             </div>
-          </div>
-          <CardDescription>
-            {#if selectedKey}
-              <span class="block w-full truncate" title={selectedKey}
-                >{selectedKey}</span
-              >
-            {:else}
-              Select a key to inspect its value
-            {/if}
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
-          <div class="relative flex min-h-0 flex-1 flex-col">
-            {#if selectedKey === null}
-              <div class="px-1 py-3 text-sm text-muted-foreground">
-                Select a key
-              </div>
-            {:else if showValueLoadingOverlay}
-              <div
-                class="flex h-full min-h-0 flex-1 flex-col rounded-md border border-border/70 bg-muted/20 p-3"
-                role="status"
-                aria-live="polite"
-              >
-                <span class="sr-only">Loading value…</span>
-                <div
-                  class="mb-3 h-3 w-40 rounded bg-muted/80 motion-safe:animate-pulse motion-reduce:animate-none"
-                ></div>
-                <div class="space-y-2.5" aria-hidden="true">
-                  <div
-                    class="h-3 w-full rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[95%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[88%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[92%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[83%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[90%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[72%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[86%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                  <div
-                    class="h-3 w-[65%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
-                  ></div>
-                </div>
-              </div>
-            {:else}
-              <textarea
-                class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
-                  isValueEditing
-                    ? "bg-background text-foreground focus-visible:border-primary"
-                    : "bg-muted/50 text-foreground"
-                }`}
-                bind:value={editorValue}
-                on:input={handleValueInput}
-                readonly={!isValueEditing || isSaving || effectiveReadOnly}
-                spellcheck="false"
-              ></textarea>
-              {#if valueValidationError}
-                <p class="px-1 text-xs text-destructive">
-                  {valueValidationError}
-                </p>
+            <CardDescription>
+              {#if selectedKey}
+                <span class="block w-full truncate" title={selectedKey}
+                  >{selectedKey}</span
+                >
+              {:else}
+                Select a key to inspect its value
               {/if}
-            {/if}
-          </div>
-        </CardContent>
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3">
+            <div class="relative flex min-h-0 flex-1 flex-col">
+              {#if selectedKey === null}
+                <div class="px-1 py-3 text-sm text-muted-foreground">
+                  Select a key
+                </div>
+              {:else if showValueLoadingOverlay}
+                <div
+                  class="flex h-full min-h-0 flex-1 flex-col rounded-md border border-border/70 bg-muted/20 p-3"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="sr-only">Loading value…</span>
+                  <div
+                    class="mb-3 h-3 w-40 rounded bg-muted/80 motion-safe:animate-pulse motion-reduce:animate-none"
+                  ></div>
+                  <div class="space-y-2.5" aria-hidden="true">
+                    <div
+                      class="h-3 w-full rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[95%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[88%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[92%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[83%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[90%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[72%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[86%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                    <div
+                      class="h-3 w-[65%] rounded bg-muted/70 motion-safe:animate-pulse motion-reduce:animate-none"
+                    ></div>
+                  </div>
+                </div>
+              {:else}
+                <textarea
+                  class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                    isValueEditing
+                      ? "bg-background text-foreground focus-visible:border-primary"
+                      : "bg-muted/50 text-foreground"
+                  }`}
+                  bind:value={editorValue}
+                  on:input={handleValueInput}
+                  readonly={!isValueEditing || isSaving || effectiveReadOnly}
+                  spellcheck="false"
+                ></textarea>
+                {#if valueValidationError}
+                  <p class="px-1 text-xs text-destructive">
+                    {valueValidationError}
+                  </p>
+                {/if}
+              {/if}
+            </div>
+          </CardContent>
         </Card>
       </div>
 
@@ -2270,7 +2269,7 @@
                       title={item.path}
                       disabled={isOpeningDatabase}
                     >
-                      {item.label}
+                      <span class="block truncate">{item.label}</span>
                     </Button>
 
                     <Button

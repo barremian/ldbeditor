@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button";
   import { DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
   import { SplitButton } from "$lib/components/ui/split-button";
+  import { ThreeDotMenu } from "$lib/components/ui/three-dot-menu";
   import {
     Card,
     CardContent,
@@ -25,7 +26,6 @@
     FolderOpen,
     History,
     KeyRound,
-    MoreHorizontal,
     Pencil,
     Plus,
     RefreshCcw,
@@ -112,9 +112,6 @@
   let countdownNow = Date.now();
   let isRefreshMenuOpen = false;
   let refreshMenuContainer: HTMLDivElement | null = null;
-  let isViewMenuOpen = false;
-  let viewMenuContainer: HTMLDivElement | null = null;
-  let openRecentMenuPath: string | null = null;
   let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
@@ -458,7 +455,6 @@
     autoRefreshIntervalMs = 0;
     nextRefreshAt = null;
     isRefreshMenuOpen = false;
-    openRecentMenuPath = null;
     clearAutoRefreshTimer();
     clearRefreshCountdownTicker();
   }
@@ -723,8 +719,6 @@
     keyPendingDelete = null;
     isValueEditing = false;
     isRefreshMenuOpen = false;
-    isViewMenuOpen = false;
-    openRecentMenuPath = null;
   }
 
   async function activateTab(
@@ -1351,13 +1345,8 @@
     window.addEventListener("resize", onWindowResize);
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === "Escape" &&
-        (isRefreshMenuOpen || isViewMenuOpen || openRecentMenuPath !== null)
-      ) {
+      if (event.key === "Escape" && isRefreshMenuOpen) {
         isRefreshMenuOpen = false;
-        isViewMenuOpen = false;
-        openRecentMenuPath = null;
         return;
       }
 
@@ -1408,27 +1397,6 @@
         isRefreshMenuOpen = false;
       }
 
-      if (
-        isViewMenuOpen &&
-        viewMenuContainer &&
-        !viewMenuContainer.contains(target)
-      ) {
-        isViewMenuOpen = false;
-      }
-
-      if (openRecentMenuPath) {
-        const targetElement =
-          target instanceof Element ? target : target.parentElement;
-        const recentMenuContainer = targetElement?.closest<HTMLElement>(
-          "[data-recent-menu-container]"
-        );
-        if (
-          !recentMenuContainer ||
-          recentMenuContainer.dataset.recentPath !== openRecentMenuPath
-        ) {
-          openRecentMenuPath = null;
-        }
-      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -1611,8 +1579,6 @@
               disabled={isRefreshing}
               on:click={() => {
                 if (isRefreshing) return;
-                isViewMenuOpen = false;
-                openRecentMenuPath = null;
                 isRefreshMenuOpen = !isRefreshMenuOpen;
               }}
             >
@@ -1650,60 +1616,42 @@
             {/if}
           </div>
 
-          <div bind:this={viewMenuContainer} class="relative">
-            <Button
-              variant="outline"
-              size="icon"
-              class="h-8 w-8"
-              title="View settings"
-              aria-label="View settings"
-              aria-haspopup="menu"
-              aria-expanded={isViewMenuOpen}
-              on:click={() => {
-                isRefreshMenuOpen = false;
-                openRecentMenuPath = null;
-                isViewMenuOpen = !isViewMenuOpen;
+          <ThreeDotMenu
+            class="h-8 w-8"
+            triggerLabel="View settings"
+            triggerTitle="View settings"
+            menuClass="min-w-48"
+            on:triggerclick={() => {
+              isRefreshMenuOpen = false;
+            }}
+          >
+            <DropdownMenuItem
+              slot="menu"
+              class={`flex items-center justify-between ${
+                prettyPrintJson ? "bg-muted/80" : ""
+              }`}
+              on:click={(event) => {
+                event.preventDefault();
+                togglePrettyPrintJson();
               }}
             >
-              <MoreHorizontal class="h-3.5 w-3.5" />
-            </Button>
-
-            {#if isViewMenuOpen}
-              <div
-                class="absolute right-0 top-10 z-50 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-                role="menu"
-                aria-label="View settings"
+              <span>Pretty JSON</span>
+              <span
+                class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+                  prettyPrintJson
+                    ? "border-primary/40 bg-primary"
+                    : "border-border bg-muted"
+                }`}
+                aria-hidden="true"
               >
-                <button
-                  type="button"
-                  class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                    prettyPrintJson ? "bg-muted/80" : ""
+                <span
+                  class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+                    prettyPrintJson ? "translate-x-4" : "translate-x-0.5"
                   }`}
-                  role="menuitemcheckbox"
-                  aria-checked={prettyPrintJson}
-                  on:click={() => {
-                    togglePrettyPrintJson();
-                  }}
-                >
-                  <span>Pretty JSON</span>
-                  <span
-                    class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
-                      prettyPrintJson
-                        ? "border-primary/40 bg-primary"
-                        : "border-border bg-muted"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    <span
-                      class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
-                        prettyPrintJson ? "translate-x-4" : "translate-x-0.5"
-                      }`}
-                    ></span>
-                  </span>
-                </button>
-              </div>
-            {/if}
-          </div>
+                ></span>
+              </span>
+            </DropdownMenuItem>
+          </ThreeDotMenu>
         </div>
       </div>
     </header>
@@ -2295,51 +2243,27 @@
                       <span class="block truncate">{item.label}</span>
                     </Button>
 
-                    <div
-                      class="relative"
-                      data-recent-menu-container
-                      data-recent-path={item.path}
+                    <ThreeDotMenu
+                      variant="ghost"
+                      class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                      triggerLabel={`More options for ${item.label}`}
+                      triggerTitle="More options"
+                      menuClass="min-w-56"
+                      disabled={isOpeningDatabase}
+                      on:triggerclick={() => {
+                        isRefreshMenuOpen = false;
+                      }}
                     >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                        title="More options"
-                        aria-label={`More options for ${item.label}`}
-                        aria-haspopup="menu"
-                        aria-expanded={openRecentMenuPath === item.path}
-                        on:click={() => {
-                          isRefreshMenuOpen = false;
-                          isViewMenuOpen = false;
-                          openRecentMenuPath =
-                            openRecentMenuPath === item.path ? null : item.path;
-                        }}
+                      <DropdownMenuItem
+                        slot="menu"
                         disabled={isOpeningDatabase}
+                        on:click={() => {
+                          void openDatabaseFromPath(item.path, true);
+                        }}
                       >
-                        <MoreHorizontal class="h-3.5 w-3.5" />
-                      </Button>
-
-                      {#if openRecentMenuPath === item.path}
-                        <div
-                          class="absolute right-0 top-8 z-50 min-w-56 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-                          role="menu"
-                          aria-label={`More options for ${item.label}`}
-                        >
-                          <button
-                            type="button"
-                            class="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
-                            role="menuitem"
-                            disabled={isOpeningDatabase}
-                            on:click={() => {
-                              openRecentMenuPath = null;
-                              void openDatabaseFromPath(item.path, true);
-                            }}
-                          >
-                            Open in read-only mode
-                          </button>
-                        </div>
-                      {/if}
-                    </div>
+                        Open in read-only mode
+                      </DropdownMenuItem>
+                    </ThreeDotMenu>
 
                     <Button
                       variant="ghost"

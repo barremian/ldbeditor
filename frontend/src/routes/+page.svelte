@@ -43,8 +43,6 @@
   const MIN_KEY_PANE_WIDTH = 300;
   const MIN_VALUE_PANE_WIDTH = 320;
   const GRID_GAP_PX = 16;
-  const SPLIT_CONTAINER_PADDING_PX = 16;
-  const SPLIT_CONTAINER_HORIZONTAL_INSET_PX = SPLIT_CONTAINER_PADDING_PX * 2;
   const AUTO_REFRESH_OPTIONS = [
     { label: "Off", intervalMs: 0 },
     { label: "5s", intervalMs: 5000 },
@@ -512,7 +510,7 @@
   }
 
   function getSplitContentWidth(containerWidth: number) {
-    return Math.max(0, containerWidth - SPLIT_CONTAINER_HORIZONTAL_INSET_PX);
+    return Math.max(0, containerWidth);
   }
 
   function clampKeyPaneWidth(
@@ -591,7 +589,6 @@
       const nextWidth =
         moveEvent.clientX -
         containerRect.left -
-        SPLIT_CONTAINER_PADDING_PX -
         GRID_GAP_PX / 2;
       keyPaneWidth = clampKeyPaneWidth(nextWidth, containerRect.width);
     };
@@ -1691,36 +1688,16 @@
     </header>
 
     <div
-      bind:this={editorSplitContainer}
-      class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2 md:grid-cols-1"
+      class="relative grid min-h-0 flex-1 gap-4 px-4 pb-4 pt-2"
       aria-busy={showEditorLoadingOverlay}
-      style={isDesktopLayout
-        ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);${dbForcedReadOnly ? " grid-template-rows: auto 1fr;" : ""}`
-        : dbForcedReadOnly
-          ? "grid-template-rows: auto 1fr 1fr;"
-          : undefined}
+      style={dbForcedReadOnly
+        ? "grid-template-rows: auto minmax(0, 1fr);"
+        : "grid-template-rows: minmax(0, 1fr);"}
     >
-      {#if isDesktopLayout}
-        <button
-          type="button"
-          class="group absolute bottom-4 top-4 z-10 w-2 -translate-x-1/2 cursor-col-resize rounded-full bg-transparent"
-          style={`left: ${SPLIT_CONTAINER_PADDING_PX + keyPaneWidth + GRID_GAP_PX / 2}px;`}
-          aria-label="Resize key and value panes"
-          on:pointerdown={startPaneResize}
-        >
-          <span
-            class={`mx-auto block h-full rounded-full transition-all ${
-              isResizingPane
-                ? "w-0.5 bg-primary/55"
-                : "w-px bg-border/55 group-hover:bg-border/75"
-            }`}
-          ></span>
-        </button>
-      {/if}
 
       {#if dbForcedReadOnly}
         <div
-          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 md:col-span-2"
+          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
           role="status"
           aria-live="polite"
         >
@@ -1738,12 +1715,37 @@
         </div>
       {/if}
 
-      <Card
-        class="flex min-h-0 min-w-0 flex-col"
+      <div
+        bind:this={editorSplitContainer}
+        class="relative grid min-h-0 min-w-0 flex-1 gap-4 md:grid-cols-1"
         style={isDesktopLayout
-          ? `min-width: ${MIN_KEY_PANE_WIDTH}px;`
+          ? `grid-template-columns: ${keyPaneWidth}px minmax(${MIN_VALUE_PANE_WIDTH}px, 1fr);`
           : undefined}
       >
+        {#if isDesktopLayout}
+          <button
+            type="button"
+            class="group absolute bottom-4 top-4 z-10 w-2 -translate-x-1/2 cursor-col-resize rounded-full bg-transparent"
+            style={`left: ${keyPaneWidth + GRID_GAP_PX / 2}px;`}
+            aria-label="Resize key and value panes"
+            on:pointerdown={startPaneResize}
+          >
+            <span
+              class={`mx-auto block h-full rounded-full transition-all ${
+                isResizingPane
+                  ? "w-0.5 bg-primary/55"
+                  : "w-px bg-border/55 group-hover:bg-border/75"
+              }`}
+            ></span>
+          </button>
+        {/if}
+
+        <Card
+          class="flex min-h-0 min-w-0 flex-col"
+          style={isDesktopLayout
+            ? `min-width: ${MIN_KEY_PANE_WIDTH}px;`
+            : undefined}
+        >
         <CardHeader class="space-y-3 pb-3">
           <div class="flex items-center justify-between gap-2">
             <CardTitle class="flex items-center gap-2 text-base">
@@ -1970,15 +1972,15 @@
             {/if}
           </div>
         </CardContent>
-      </Card>
+        </Card>
 
-      <Card
-        class="flex min-h-0 min-w-0 flex-col"
-        style={isDesktopLayout
-          ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;`
-          : undefined}
-        aria-busy={showValueLoadingOverlay}
-      >
+        <Card
+          class="flex min-h-0 min-w-0 flex-col"
+          style={isDesktopLayout
+            ? `min-width: ${MIN_VALUE_PANE_WIDTH}px;`
+            : undefined}
+          aria-busy={showValueLoadingOverlay}
+        >
         <CardHeader class="space-y-3 pb-3">
           <div class="flex items-center justify-between gap-2">
             <CardTitle class="flex items-center gap-2 text-base">
@@ -2119,7 +2121,8 @@
             {/if}
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {#if showEditorLoadingOverlay}
         <div

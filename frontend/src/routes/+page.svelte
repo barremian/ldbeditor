@@ -19,6 +19,7 @@
   import {
     Check,
     ChevronDown,
+    Copy,
     Database,
     FileText,
     FolderOpen,
@@ -104,6 +105,8 @@
   let keySearchInput = "";
   let debouncedKeySearch = "";
   let keySearchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
+  let hasCopiedValue = false;
+  let copyValueFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
   let renameInputElement: HTMLInputElement | null = null;
   let isRefreshing = false;
   let autoRefreshIntervalMs = 0;
@@ -388,6 +391,25 @@
     if (!(target instanceof HTMLTextAreaElement)) return;
     editorValue = target.value;
     editorValueRaw = target.value;
+  }
+
+  async function copyValueToClipboard() {
+    if (!selectedKey || showValueLoadingOverlay) return;
+    try {
+      await navigator.clipboard.writeText(editorValue);
+      hasCopiedValue = true;
+      if (copyValueFeedbackTimeout) {
+        clearTimeout(copyValueFeedbackTimeout);
+      }
+      copyValueFeedbackTimeout = setTimeout(() => {
+        hasCopiedValue = false;
+      }, 1600);
+    } catch {
+      await Dialogs.Error({
+        Title: "Copy failed",
+        Message: "Unable to copy value to clipboard.",
+      });
+    }
   }
 
   function getAutoRefreshLabel(intervalMs: number) {
@@ -1411,6 +1433,9 @@
     if (keySearchDebounceTimeout) {
       clearTimeout(keySearchDebounceTimeout);
     }
+    if (copyValueFeedbackTimeout) {
+      clearTimeout(copyValueFeedbackTimeout);
+    }
   });
 
   // Init
@@ -2002,6 +2027,20 @@
                   Edit
                 </Button>
               {/if}
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={!selectedKey || valueLoading || isSaving}
+                on:click={copyValueToClipboard}
+                title={hasCopiedValue ? "Copied" : "Copy value"}
+                aria-label={hasCopiedValue ? "Copied" : "Copy value"}
+              >
+                {#if hasCopiedValue}
+                  <Check class="h-3.5 w-3.5" />
+                {:else}
+                  <Copy class="h-3.5 w-3.5" />
+                {/if}
+              </Button>
             </div>
           </div>
           <CardDescription>

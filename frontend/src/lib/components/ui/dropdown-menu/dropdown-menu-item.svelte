@@ -18,6 +18,8 @@
     className
   )}
   {...$$restProps}
+  on:click
+  on:keydown
 >
   <slot />
 </DropdownMenuPrimitive.Item>

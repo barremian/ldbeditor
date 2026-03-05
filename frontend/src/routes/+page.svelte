@@ -5,6 +5,8 @@
   import { OpenDatabaseResult } from "../../bindings/ldbeditor/models";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
+  import { DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
+  import { SplitButton } from "$lib/components/ui/split-button";
   import {
     Card,
     CardContent,
@@ -926,7 +928,7 @@
     }
   }
 
-  async function openDatabaseFromDialog() {
+  async function openDatabaseFromDialog(overrideReadOnly?: boolean) {
     try {
       const path = await Dialogs.OpenFile({
         CanChooseDirectories: true,
@@ -937,7 +939,10 @@
       // OpenFile returns string or string[] depending on options; for single dir it's a string
       const selectedPath = Array.isArray(path) ? path[0] : path;
       if (selectedPath) {
-        await openDatabaseFromPath(selectedPath, readOnlyOpenMode);
+        await openDatabaseFromPath(
+          selectedPath,
+          overrideReadOnly ?? readOnlyOpenMode
+        );
       }
     } catch (err) {
       console.error("Dialog error:", err);
@@ -2249,14 +2254,27 @@
             </p>
           </section>
 
-          <Button
-            class="gap-2"
-            on:click={openDatabaseFromDialog}
+          <SplitButton
+            class="w-fit"
             disabled={isOpeningDatabase}
+            triggerLabel="More open options"
+            on:primary={() => {
+              void openDatabaseFromDialog();
+            }}
           >
             <FolderOpen class="h-4 w-4" />
             {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
-          </Button>
+
+            <DropdownMenuItem
+              slot="menu"
+              disabled={isOpeningDatabase}
+              on:click={() => {
+                void openDatabaseFromDialog(true);
+              }}
+            >
+              Open in read-only mode
+            </DropdownMenuItem>
+          </SplitButton>
 
           {#if errorMessage}
             <p class="text-sm text-destructive">{errorMessage}</p>

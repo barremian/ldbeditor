@@ -2204,8 +2204,10 @@
               void openDatabaseFromDialog();
             }}
           >
-            <FolderOpen class="h-4 w-4" />
-            {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
+            <span class="inline-flex items-center gap-2">
+              <FolderOpen class="h-4 w-4" />
+              {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
+            </span>
 
             <DropdownMenuItem
               slot="menu"

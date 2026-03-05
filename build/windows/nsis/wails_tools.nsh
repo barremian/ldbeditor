@@ -5,7 +5,7 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "ldbeditor"
+    !define INFO_PROJECTNAME "LevelDB Editor"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "Barremian"

@@ -14,4 +14,9 @@ export default defineConfig({
     },
   },
   plugins: [sveltekit(), wails("./bindings")],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.ts"],
+  },
 });

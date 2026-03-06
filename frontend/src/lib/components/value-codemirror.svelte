@@ -1,9 +1,21 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount } from "svelte";
-  import { Annotation, Compartment, EditorState } from "@codemirror/state";
+  import {
+    Annotation,
+    Compartment,
+    EditorState,
+    StateEffect,
+    StateField,
+  } from "@codemirror/state";
   import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-  import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+  import {
+    EditorView,
+    keymap,
+    lineNumbers,
+    showTooltip,
+    type Tooltip,
+  } from "@codemirror/view";
   import { cn } from "$lib/utils.js";
 
   type $$Props = {
@@ -25,10 +37,127 @@
   const dispatch = createEventDispatcher<$$Events>();
   const parentValueSync = Annotation.define<boolean>();
   const readOnlyCompartment = new Compartment();
+  const hideReadOnlyTooltipEffect = StateEffect.define<null>();
+  const showReadOnlyTooltipEffect = StateEffect.define<{
+    pos: number;
+    message: string;
+    above: boolean;
+  }>();
+  const readOnlyTooltipField = StateField.define<readonly Tooltip[]>({
+    create: () => [],
+    update(tooltips, transaction) {
+      for (const effect of transaction.effects) {
+        if (effect.is(hideReadOnlyTooltipEffect)) {
+          return [];
+        }
+        if (effect.is(showReadOnlyTooltipEffect)) {
+          const { pos, message, above } = effect.value;
+          return [
+            {
+              pos,
+              above,
+              strictSide: false,
+              arrow: true,
+              create: () => {
+                const dom = document.createElement("div");
+                dom.className = "cm-tooltip-readonly-edit";
+                dom.textContent = message;
+                return { dom };
+              },
+            },
+          ];
+        }
+      }
+      return tooltips;
+    },
+    provide: (field) =>
+      showTooltip.computeN([field], (state) => state.field(field)),
+  });
+  const readOnlyTooltipDurationMs = 1800;
+  const readOnlyTooltipThrottleMs = 250;
 
   let hostElement: HTMLDivElement | null = null;
   let view: EditorView | null = null;
   let appliedReadOnly = readOnly;
+  let readOnlyTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+  let lastReadOnlyTooltipShownAt = 0;
+
+  function clearReadOnlyTooltipTimeout() {
+    if (!readOnlyTooltipTimeout) return;
+    clearTimeout(readOnlyTooltipTimeout);
+    readOnlyTooltipTimeout = null;
+  }
+
+  function hideReadOnlyTooltip() {
+    if (!view) return;
+    view.dispatch({ effects: [hideReadOnlyTooltipEffect.of(null)] });
+  }
+
+  function scheduleReadOnlyTooltipHide() {
+    clearReadOnlyTooltipTimeout();
+    readOnlyTooltipTimeout = setTimeout(() => {
+      readOnlyTooltipTimeout = null;
+      hideReadOnlyTooltip();
+    }, readOnlyTooltipDurationMs);
+  }
+
+  function getReadOnlyTooltipMessage() {
+    // Keep this fixed for read-only edit attempts.
+    return "Cannot edit in read-only mode";
+  }
+
+  function shouldShowTooltipAbove(targetView: EditorView, pos: number) {
+    const caretCoords = targetView.coordsAtPos(pos);
+    if (!caretCoords) return true;
+
+    const scrollerRect = targetView.scrollDOM.getBoundingClientRect();
+    const minPreferredSpacePx = 40;
+    const spaceAbove = caretCoords.top - scrollerRect.top;
+    const spaceBelow = scrollerRect.bottom - caretCoords.bottom;
+
+    if (spaceAbove < minPreferredSpacePx && spaceBelow > spaceAbove) {
+      return false;
+    }
+    if (spaceBelow < minPreferredSpacePx && spaceAbove >= spaceBelow) {
+      return true;
+    }
+    return spaceAbove >= spaceBelow;
+  }
+
+  function showReadOnlyTooltip(targetView: EditorView) {
+    const now = Date.now();
+    if (now - lastReadOnlyTooltipShownAt < readOnlyTooltipThrottleMs) return;
+    lastReadOnlyTooltipShownAt = now;
+
+    const pos = targetView.state.selection.main.head;
+    targetView.dispatch({
+      effects: [
+        showReadOnlyTooltipEffect.of({
+          pos,
+          message: getReadOnlyTooltipMessage(),
+          above: shouldShowTooltipAbove(targetView, pos),
+        }),
+      ],
+    });
+    scheduleReadOnlyTooltipHide();
+  }
+
+  function handleReadOnlyEditAttempt(
+    targetView: EditorView,
+    event?: KeyboardEvent | ClipboardEvent | DragEvent | InputEvent
+  ) {
+    if (!targetView.state.readOnly) return false;
+    event?.preventDefault();
+    showReadOnlyTooltip(targetView);
+    return true;
+  }
+
+  function isEditAttemptKey(event: KeyboardEvent) {
+    if (event.key === "Backspace" || event.key === "Delete") return true;
+    if (event.metaKey || event.ctrlKey || event.altKey) return false;
+    if (event.key.length === 1) return true;
+    return event.key === "Enter";
+  }
 
   function buildEditorState(doc: string) {
     return EditorState.create({
@@ -41,6 +170,19 @@
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.contentAttributes.of({ spellcheck: "false" }),
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+        readOnlyTooltipField,
+        EditorView.domEventHandlers({
+          beforeinput: (event, targetView) =>
+            handleReadOnlyEditAttempt(targetView, event),
+          paste: (event, targetView) =>
+            handleReadOnlyEditAttempt(targetView, event),
+          drop: (event, targetView) =>
+            handleReadOnlyEditAttempt(targetView, event),
+          keydown: (event, targetView) => {
+            if (!isEditAttemptKey(event)) return false;
+            return handleReadOnlyEditAttempt(targetView, event);
+          },
+        }),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           if (
@@ -84,6 +226,27 @@
           ".cm-activeLineGutter": {
             backgroundColor: "transparent",
           },
+          ".cm-tooltip.cm-tooltip-readonly-edit": {
+            maxWidth: "22rem",
+            border: "1px solid hsl(var(--primary) / 0.65)",
+            borderRadius: "0.25rem",
+            backgroundColor: "hsl(var(--popover) / 1)",
+            color: "hsl(var(--popover-foreground) / 1)",
+            padding: "0.3rem 0.55rem",
+            fontSize: "0.8rem",
+            fontWeight: "400",
+            lineHeight: "1.2",
+            boxShadow:
+              "0 10px 20px hsl(var(--foreground) / 0.18), 0 0 0 1px hsl(var(--background) / 0.65)",
+          },
+          ".cm-tooltip.cm-tooltip-readonly-edit .cm-tooltip-arrow:before": {
+            borderTopColor: "hsl(var(--primary) / 0.65)",
+            borderBottomColor: "hsl(var(--primary) / 0.65)",
+          },
+          ".cm-tooltip.cm-tooltip-readonly-edit .cm-tooltip-arrow:after": {
+            borderTopColor: "hsl(var(--popover) / 1)",
+            borderBottomColor: "hsl(var(--popover) / 1)",
+          },
         }),
       ],
     });
@@ -118,10 +281,15 @@
         readOnlyCompartment.reconfigure(EditorState.readOnly.of(readOnly)),
       ],
     });
+    if (!readOnly) {
+      clearReadOnlyTooltipTimeout();
+      hideReadOnlyTooltip();
+    }
     appliedReadOnly = readOnly;
   }
 
   onDestroy(() => {
+    clearReadOnlyTooltipTimeout();
     if (!view) return;
     view.destroy();
     view = null;

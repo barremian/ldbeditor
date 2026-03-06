@@ -8,6 +8,9 @@
   } from "$lib/components/ui/dropdown-menu";
 
   export let onItemClick: () => void;
+  export let radio = false;
+  export let checked = false;
+  export let showRadioIndicator = true;
 </script>
 
 <DropdownMenu>
@@ -15,6 +18,13 @@
     <Button builders={[builder]} aria-label="Open actions">Open actions</Button>
   </DropdownMenuTrigger>
   <DropdownMenuContent>
-    <DropdownMenuItem on:click={onItemClick}>Open in read-only mode</DropdownMenuItem>
+    <DropdownMenuItem
+      {radio}
+      {checked}
+      {showRadioIndicator}
+      on:click={onItemClick}
+    >
+      Open in read-only mode
+    </DropdownMenuItem>
   </DropdownMenuContent>
 </DropdownMenu>

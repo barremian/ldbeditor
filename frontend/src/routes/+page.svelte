@@ -19,7 +19,6 @@
   import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
   import {
     Check,
-    ChevronDown,
     Copy,
     Database,
     FileText,
@@ -110,8 +109,6 @@
   let autoRefreshIntervalMs = 0;
   let nextRefreshAt: number | null = null;
   let countdownNow = Date.now();
-  let isRefreshMenuOpen = false;
-  let refreshMenuContainer: HTMLDivElement | null = null;
   let autoRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
@@ -454,14 +451,12 @@
   function stopAutoRefresh() {
     autoRefreshIntervalMs = 0;
     nextRefreshAt = null;
-    isRefreshMenuOpen = false;
     clearAutoRefreshTimer();
     clearRefreshCountdownTicker();
   }
 
   function setAutoRefreshInterval(intervalMs: number) {
     autoRefreshIntervalMs = intervalMs;
-    isRefreshMenuOpen = false;
     if (intervalMs <= 0 || !dbPath) {
       nextRefreshAt = null;
       clearAutoRefreshTimer();
@@ -718,7 +713,6 @@
     resetRenameForm();
     keyPendingDelete = null;
     isValueEditing = false;
-    isRefreshMenuOpen = false;
   }
 
   async function activateTab(
@@ -988,7 +982,6 @@
       return;
     }
 
-    isRefreshMenuOpen = false;
     isRefreshing = true;
     const refreshStartedAtMs = Date.now();
     try {
@@ -1345,11 +1338,6 @@
     window.addEventListener("resize", onWindowResize);
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isRefreshMenuOpen) {
-        isRefreshMenuOpen = false;
-        return;
-      }
-
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         if (
           selectedKey &&
@@ -1385,28 +1373,12 @@
       }
     };
 
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-
-      if (
-        isRefreshMenuOpen &&
-        refreshMenuContainer &&
-        !refreshMenuContainer.contains(target)
-      ) {
-        isRefreshMenuOpen = false;
-      }
-
-    };
-
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("pointerdown", onPointerDown);
 
     return () => {
       mediaQuery.removeEventListener("change", updateLayoutMode);
       window.removeEventListener("resize", onWindowResize);
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("pointerdown", onPointerDown);
       stopPaneResize();
     };
   });
@@ -1523,18 +1495,18 @@
         <div
           class="flex items-center justify-between gap-2 md:shrink-0 md:justify-end"
         >
-          <div
-            bind:this={refreshMenuContainer}
-            class="relative flex items-stretch"
+          <SplitButton
+            variant="outline"
+            size="sm"
+            disabled={isRefreshing}
+            triggerLabel="Auto-refresh options"
+            menuClass="min-w-40"
+            primaryClass="gap-1.5 border-r-0 pr-2"
+            triggerClass="w-8 px-0"
+            triggerIconClass="h-3.5 w-3.5"
+            on:primary={triggerManualRefresh}
           >
-            <Button
-              variant="outline"
-              size="sm"
-              class="gap-1.5 rounded-r-none border-r-0 pr-2"
-              title={getRefreshButtonTitle()}
-              disabled={isRefreshing}
-              on:click={triggerManualRefresh}
-            >
+            <span class="inline-flex items-center gap-1.5" title={getRefreshButtonTitle()}>
               {#if isRefreshing}
                 <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
               {:else if autoRefreshIntervalMs > 0}
@@ -1568,62 +1540,27 @@
                 <RefreshCcw class="h-3.5 w-3.5" />
               {/if}
               {isRefreshing ? "Refreshing…" : "Refresh"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              class="w-8 rounded-l-none px-0"
-              aria-label="Auto-refresh options"
-              aria-haspopup="menu"
-              aria-expanded={isRefreshMenuOpen}
-              disabled={isRefreshing}
-              on:click={() => {
-                if (isRefreshing) return;
-                isRefreshMenuOpen = !isRefreshMenuOpen;
-              }}
-            >
-              <ChevronDown class="h-3.5 w-3.5" />
-            </Button>
+            </span>
 
-            {#if isRefreshMenuOpen}
-              <div
-                class={`absolute right-0 top-10 z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md ${
-                  isRefreshing ? "pointer-events-none opacity-70" : ""
-                }`}
-                role="menu"
-                aria-label="Auto-refresh interval options"
-              >
-                {#each AUTO_REFRESH_OPTIONS as option}
-                  <button
-                    type="button"
-                    class={`flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                      option.intervalMs === autoRefreshIntervalMs
-                        ? "bg-muted/80"
-                        : ""
-                    }`}
-                    role="menuitemradio"
-                    aria-checked={option.intervalMs === autoRefreshIntervalMs}
-                    disabled={isRefreshing}
-                    on:click={() => setAutoRefreshInterval(option.intervalMs)}
-                  >
-                    <span>{option.label}</span>
-                    {#if option.intervalMs === autoRefreshIntervalMs}
-                      <Check class="h-3.5 w-3.5" />
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
+            <svelte:fragment slot="menu">
+              {#each AUTO_REFRESH_OPTIONS as option}
+                <DropdownMenuItem
+                  radio={true}
+                  checked={option.intervalMs === autoRefreshIntervalMs}
+                  disabled={isRefreshing}
+                  on:click={() => setAutoRefreshInterval(option.intervalMs)}
+                >
+                  <span>{option.label}</span>
+                </DropdownMenuItem>
+              {/each}
+            </svelte:fragment>
+          </SplitButton>
 
           <ThreeDotMenu
             class="h-8 w-8"
             triggerLabel="View settings"
             triggerTitle="View settings"
             menuClass="min-w-48"
-            on:triggerclick={() => {
-              isRefreshMenuOpen = false;
-            }}
           >
             <DropdownMenuItem
               slot="menu"
@@ -2252,9 +2189,6 @@
                       triggerTitle="More options"
                       menuClass="min-w-56"
                       disabled={isOpeningDatabase}
-                      on:triggerclick={() => {
-                        isRefreshMenuOpen = false;
-                      }}
                     >
                       <DropdownMenuItem
                         slot="menu"

@@ -21,6 +21,10 @@
     triggerLabel?: string;
     menuAlign?: ContentProps["align"];
     menuSideOffset?: ContentProps["sideOffset"];
+    primaryClass?: string;
+    triggerClass?: string;
+    menuClass?: string;
+    triggerIconClass?: string;
   };
 
   type $$Events = {
@@ -37,6 +41,10 @@
   export let triggerLabel: $$Props["triggerLabel"] = "More actions";
   export let menuAlign: $$Props["menuAlign"] = "end";
   export let menuSideOffset: $$Props["menuSideOffset"] = 4;
+  export let primaryClass: $$Props["primaryClass"] = undefined;
+  export let triggerClass: $$Props["triggerClass"] = undefined;
+  export let menuClass: $$Props["menuClass"] = undefined;
+  export let triggerIconClass: $$Props["triggerIconClass"] = "h-4 w-4";
   export { className as class };
 
   const dispatch = createEventDispatcher<$$Events>();
@@ -51,7 +59,7 @@
     {variant}
     {size}
     disabled={disabled || primaryDisabled}
-    class="rounded-r-none"
+    class={cn("rounded-r-none", primaryClass)}
     on:click={handlePrimaryClick}
   >
     <slot>{primaryLabel}</slot>
@@ -64,14 +72,18 @@
         {variant}
         {size}
         disabled={disabled || menuDisabled}
-        class="rounded-l-none border-l border-border/60 px-2"
+        class={cn("rounded-l-none border-l border-border/60 px-2", triggerClass)}
         aria-label={triggerLabel}
       >
-        <ChevronDown class="h-4 w-4" />
+        <ChevronDown class={triggerIconClass} />
       </Button>
     </DropdownMenuTrigger>
 
-    <DropdownMenuContent align={menuAlign} sideOffset={menuSideOffset}>
+    <DropdownMenuContent
+      align={menuAlign}
+      sideOffset={menuSideOffset}
+      class={menuClass}
+    >
       <slot name="menu" />
     </DropdownMenuContent>
   </DropdownMenu>

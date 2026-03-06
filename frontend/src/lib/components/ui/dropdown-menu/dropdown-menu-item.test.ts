@@ -11,11 +11,12 @@ async function openActionsMenuAndGetItem(
   findByRole: (
     role: string,
     options?: Record<string, unknown>
-  ) => Promise<HTMLElement>
+  ) => Promise<HTMLElement>,
+  role: "menuitem" | "menuitemradio" = "menuitem"
 ) {
   await fireEvent.click(getByRole("button", { name: "Open actions" }));
 
-  return findByRole("menuitem", {
+  return findByRole(role, {
     name: "Open in read-only mode",
   });
 }
@@ -63,5 +64,40 @@ describe("DropdownMenuItem wrapper", () => {
     await fireEvent.keyDown(item, { key: " " });
 
     expect(onItemClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders as menuitemradio with checked state", async () => {
+    const { getByRole, findByRole } = render(Host, {
+      onItemClick: vi.fn(),
+      radio: true,
+      checked: true,
+    });
+
+    const item = await openActionsMenuAndGetItem(
+      getByRole,
+      findByRole,
+      "menuitemradio"
+    );
+
+    expect(item).toHaveAttribute("aria-checked", "true");
+    expect(item.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders radio item without indicator when disabled by prop", async () => {
+    const { getByRole, findByRole } = render(Host, {
+      onItemClick: vi.fn(),
+      radio: true,
+      checked: true,
+      showRadioIndicator: false,
+    });
+
+    const item = await openActionsMenuAndGetItem(
+      getByRole,
+      findByRole,
+      "menuitemradio"
+    );
+
+    expect(item).toHaveAttribute("aria-checked", "true");
+    expect(item.querySelector("svg")).toBeNull();
   });
 });

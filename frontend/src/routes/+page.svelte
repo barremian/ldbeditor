@@ -17,6 +17,7 @@
   } from "$lib/components/ui/card";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
+  import ValueCodeMirror from "$lib/components/value-codemirror.svelte";
   import {
     Check,
     Copy,
@@ -198,6 +199,7 @@
   }
 
   function getHexValidationError(display: string, label: string): string {
+    if (typeof display !== "string") return "";
     if (!display.startsWith("0x")) return "";
     const raw = display.slice(2);
     if (raw.length % 2 !== 0) {
@@ -379,11 +381,13 @@
     syncEditorDisplayWithRawValue();
   }
 
-  function handleValueInput(event: Event) {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLTextAreaElement)) return;
-    editorValue = target.value;
-    editorValueRaw = target.value;
+  function handleValueEditorChange(
+    event: { value: string } | CustomEvent<{ value: string }>
+  ) {
+    const nextValue =
+      "detail" in event ? event.detail?.value ?? "" : event.value ?? "";
+    editorValue = nextValue;
+    editorValueRaw = nextValue;
   }
 
   async function copyValueToClipboard() {
@@ -2009,17 +2013,16 @@
                   </div>
                 </div>
               {:else}
-                <textarea
-                  class={`h-full min-h-0 flex-1 resize-none cursor-text select-text rounded-md border border-border/70 p-2 font-mono text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-0 ${
+                <ValueCodeMirror
+                  class={`h-full min-h-0 flex-1 cursor-text select-text rounded-md border border-border/70 transition-colors ${
                     isValueEditing
-                      ? "bg-background text-foreground focus-visible:border-primary"
+                      ? "bg-background text-foreground focus-within:border-primary"
                       : "bg-muted/50 text-foreground"
                   }`}
-                  bind:value={editorValue}
-                  on:input={handleValueInput}
-                  readonly={!isValueEditing || isSaving || effectiveReadOnly}
-                  spellcheck="false"
-                ></textarea>
+                  value={editorValue}
+                  on:change={handleValueEditorChange}
+                  readOnly={!isValueEditing || isSaving || effectiveReadOnly}
+                />
                 {#if valueValidationError}
                   <p class="px-1 text-xs text-destructive">
                     {valueValidationError}

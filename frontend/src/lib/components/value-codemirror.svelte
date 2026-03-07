@@ -8,7 +8,11 @@
     StateField,
   } from "@codemirror/state";
   import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
-  import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+  import {
+    search,
+    searchKeymap,
+    highlightSelectionMatches,
+  } from "@codemirror/search";
   import {
     EditorView,
     keymap,
@@ -166,6 +170,7 @@
         lineNumbers(),
         history({ minDepth: 100 }),
         EditorView.lineWrapping,
+        search({ top: true }),
         highlightSelectionMatches(),
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.contentAttributes.of({ spellcheck: "false" }),

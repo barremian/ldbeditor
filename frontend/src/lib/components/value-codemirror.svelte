@@ -12,13 +12,24 @@
     search,
     searchKeymap,
     highlightSelectionMatches,
+    SearchQuery,
+    closeSearchPanel,
+    findNext,
+    findPrevious,
+    getSearchQuery,
+    replaceAll,
+    replaceNext,
+    setSearchQuery,
   } from "@codemirror/search";
   import {
     EditorView,
     keymap,
     lineNumbers,
+    runScopeHandlers,
     showTooltip,
+    type Panel,
     type Tooltip,
+    type ViewUpdate,
   } from "@codemirror/view";
   import { cn } from "$lib/utils.js";
 
@@ -163,6 +174,302 @@
     return event.key === "Enter";
   }
 
+  const searchMatchCountLimit = 5000;
+
+  type SearchMatchSummary = {
+    current: number;
+    total: number;
+    overflow: boolean;
+  };
+
+  function getSearchMatchSummary(
+    targetView: EditorView,
+    query: SearchQuery
+  ): SearchMatchSummary {
+    if (!query.search || !query.valid) {
+      return { current: 0, total: 0, overflow: false };
+    }
+
+    const mainSelection = targetView.state.selection.main;
+    let total = 0;
+    let current = 0;
+    let nextFromSelection = 0;
+    let overflow = false;
+
+    const cursor = query.getCursor(targetView.state);
+    while (true) {
+      const step = cursor.next();
+      if (step.done || !step.value) break;
+      const match = step.value;
+      total += 1;
+      if (mainSelection.from === match.from && mainSelection.to === match.to) {
+        current = total;
+      }
+      if (nextFromSelection === 0 && mainSelection.from <= match.from) {
+        nextFromSelection = total;
+      }
+      if (total >= searchMatchCountLimit) {
+        overflow = true;
+        break;
+      }
+    }
+
+    if (current === 0 && total > 0) {
+      current = nextFromSelection || 1;
+    }
+
+    return { current, total, overflow };
+  }
+
+  class CustomSearchPanel implements Panel {
+    dom: HTMLElement;
+    searchField: HTMLInputElement;
+    replaceField: HTMLInputElement | null = null;
+    caseToggle: HTMLButtonElement;
+    regexpToggle: HTMLButtonElement;
+    wordToggle: HTMLButtonElement;
+    matchSummary: HTMLSpanElement;
+    previousButton: HTMLButtonElement;
+    nextButton: HTMLButtonElement;
+    replaceButton: HTMLButtonElement | null = null;
+    replaceAllButton: HTMLButtonElement | null = null;
+    query: SearchQuery;
+
+    constructor(readonly view: EditorView) {
+      this.query = getSearchQuery(view.state);
+      this.commit = this.commit.bind(this);
+
+      this.searchField = document.createElement("input");
+      this.searchField.className = "cm-searchInput";
+      this.searchField.name = "search";
+      this.searchField.placeholder = "Find";
+      this.searchField.setAttribute("aria-label", "Find");
+      this.searchField.setAttribute("main-field", "true");
+      this.searchField.addEventListener("input", this.commit);
+      this.searchField.addEventListener("change", this.commit);
+
+      this.caseToggle = this.createToggleButton("Aa", "Match case");
+      this.regexpToggle = this.createToggleButton(".*", "Regex");
+      this.wordToggle = this.createToggleButton("W", "Match whole word");
+
+      const toggleGroup = document.createElement("div");
+      toggleGroup.className = "cm-searchToggleGroup";
+      toggleGroup.append(this.caseToggle, this.regexpToggle, this.wordToggle);
+
+      const inputWrap = document.createElement("div");
+      inputWrap.className = "cm-searchInputWrap";
+      inputWrap.append(this.searchField, toggleGroup);
+
+      this.matchSummary = document.createElement("span");
+      this.matchSummary.className = "cm-searchCounter";
+      this.matchSummary.textContent = "0/0";
+
+      this.previousButton = this.createIconButton(
+        "cm-searchIconButton",
+        "‹",
+        "Previous match",
+        () => {
+          findPrevious(this.view);
+          this.refreshMatchSummary();
+        }
+      );
+      this.nextButton = this.createIconButton(
+        "cm-searchIconButton",
+        "›",
+        "Next match",
+        () => {
+          findNext(this.view);
+          this.refreshMatchSummary();
+        }
+      );
+
+      const navGroup = document.createElement("div");
+      navGroup.className = "cm-searchNav";
+      navGroup.append(this.previousButton, this.nextButton);
+
+      const closeButton = this.createIconButton(
+        "cm-searchCloseButton",
+        "×",
+        "Close search",
+        () => {
+          closeSearchPanel(this.view);
+        }
+      );
+
+      const searchRow = document.createElement("div");
+      searchRow.className = "cm-searchRow";
+      searchRow.append(inputWrap, this.matchSummary, navGroup, closeButton);
+
+      const panelRoot = document.createElement("div");
+      panelRoot.className = "cm-search cm-search-custom";
+      panelRoot.addEventListener("keydown", (event) => this.keydown(event));
+      panelRoot.append(searchRow);
+
+      if (!view.state.readOnly) {
+        this.replaceField = document.createElement("input");
+        this.replaceField.className = "cm-replaceInput";
+        this.replaceField.name = "replace";
+        this.replaceField.placeholder = "Replace";
+        this.replaceField.setAttribute("aria-label", "Replace");
+        this.replaceField.addEventListener("input", this.commit);
+        this.replaceField.addEventListener("change", this.commit);
+
+        this.replaceButton = this.createIconButton(
+          "cm-searchReplaceButton",
+          "↦",
+          "Replace current match",
+          () => replaceNext(this.view)
+        );
+        this.replaceAllButton = this.createIconButton(
+          "cm-searchReplaceButton",
+          "↦↦",
+          "Replace all matches",
+          () => replaceAll(this.view)
+        );
+
+        const replaceRow = document.createElement("div");
+        replaceRow.className = "cm-searchReplaceRow";
+        replaceRow.append(
+          this.replaceField,
+          this.replaceButton,
+          this.replaceAllButton
+        );
+        panelRoot.append(replaceRow);
+      }
+
+      this.dom = panelRoot;
+      this.setQuery(this.query);
+      this.refreshMatchSummary();
+    }
+
+    private createToggleButton(label: string, ariaLabel: string) {
+      return this.createIconButton(
+        "cm-searchToggle",
+        label,
+        ariaLabel,
+        (event) => {
+          const target = event.currentTarget as HTMLButtonElement;
+          this.setToggleState(target, !this.isToggleActive(target));
+          this.commit();
+        },
+        true
+      );
+    }
+
+    private createIconButton(
+      className: string,
+      text: string,
+      ariaLabel: string,
+      onClick: (event: MouseEvent) => void,
+      toggle = false
+    ) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = className;
+      button.textContent = text;
+      button.title = ariaLabel;
+      button.setAttribute("aria-label", ariaLabel);
+      if (toggle) {
+        button.setAttribute("aria-pressed", "false");
+      }
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    private isToggleActive(button: HTMLButtonElement) {
+      return button.getAttribute("aria-pressed") === "true";
+    }
+
+    private setToggleState(button: HTMLButtonElement, active: boolean) {
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.classList.toggle("cm-active", active);
+    }
+
+    commit() {
+      const query = new SearchQuery({
+        search: this.searchField.value,
+        replace: this.replaceField?.value ?? "",
+        caseSensitive: this.isToggleActive(this.caseToggle),
+        regexp: this.isToggleActive(this.regexpToggle),
+        wholeWord: this.isToggleActive(this.wordToggle),
+      });
+      if (!query.eq(this.query)) {
+        this.query = query;
+        this.view.dispatch({ effects: setSearchQuery.of(query) });
+      }
+      this.refreshMatchSummary();
+    }
+
+    private keydown(event: KeyboardEvent) {
+      if (runScopeHandlers(this.view, event, "search-panel")) {
+        event.preventDefault();
+      } else if (event.key === "Enter" && event.target === this.searchField) {
+        event.preventDefault();
+        (event.shiftKey ? findPrevious : findNext)(this.view);
+      } else if (event.key === "Enter" && event.target === this.replaceField) {
+        event.preventDefault();
+        replaceNext(this.view);
+      }
+      this.refreshMatchSummary();
+    }
+
+    private refreshMatchSummary() {
+      const summary = getSearchMatchSummary(this.view, this.query);
+      const totalText = summary.overflow ? `${summary.total}+` : `${summary.total}`;
+      this.matchSummary.textContent = `${summary.current}/${totalText}`;
+
+      const hasValidSearch = this.query.valid && this.query.search.length > 0;
+      const hasAnyMatch = hasValidSearch && summary.total > 0;
+      this.previousButton.disabled = !hasAnyMatch;
+      this.nextButton.disabled = !hasAnyMatch;
+      if (this.replaceButton) this.replaceButton.disabled = !hasAnyMatch;
+      if (this.replaceAllButton) this.replaceAllButton.disabled = !hasAnyMatch;
+
+      this.searchField.classList.toggle(
+        "cm-invalid",
+        this.query.search.length > 0 && !this.query.valid
+      );
+    }
+
+    update(update: ViewUpdate) {
+      let handledQueryEffect = false;
+      for (const transaction of update.transactions) {
+        for (const effect of transaction.effects) {
+          if (effect.is(setSearchQuery) && !effect.value.eq(this.query)) {
+            this.setQuery(effect.value);
+            handledQueryEffect = true;
+          }
+        }
+      }
+      if (handledQueryEffect || update.docChanged || update.selectionSet) {
+        this.refreshMatchSummary();
+      }
+    }
+
+    private setQuery(query: SearchQuery) {
+      this.query = query;
+      this.searchField.value = query.search;
+      if (this.replaceField) {
+        this.replaceField.value = query.replace;
+      }
+      this.setToggleState(this.caseToggle, query.caseSensitive);
+      this.setToggleState(this.regexpToggle, query.regexp);
+      this.setToggleState(this.wordToggle, query.wholeWord);
+      this.searchField.classList.toggle(
+        "cm-invalid",
+        query.search.length > 0 && !query.valid
+      );
+    }
+
+    mount() {
+      this.searchField.select();
+    }
+
+    get top() {
+      return true;
+    }
+  }
+
   function buildEditorState(doc: string) {
     return EditorState.create({
       doc,
@@ -170,7 +477,10 @@
         lineNumbers(),
         history({ minDepth: 100 }),
         EditorView.lineWrapping,
-        search({ top: true }),
+        search({
+          top: true,
+          createPanel: (searchView) => new CustomSearchPanel(searchView),
+        }),
         highlightSelectionMatches(),
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         EditorView.contentAttributes.of({ spellcheck: "false" }),
@@ -241,126 +551,153 @@
           ".cm-panels.cm-panels-bottom": {
             borderTop: "1px solid hsl(var(--border) / 0.9)",
           },
-          ".cm-panel.cm-search": {
-            display: "grid",
-            gridTemplateColumns:
-              "minmax(12rem, 1fr) auto auto auto auto auto auto auto auto",
-            alignItems: "center",
-            columnGap: "0.5rem",
-            rowGap: "0.4rem",
-            padding: "0.45rem 0.6rem",
+          ".cm-panel.cm-search.cm-search-custom": {
+            display: "flex",
+            flexDirection: "column",
+            rowGap: "0.45rem",
+            padding: "0.5rem 0.6rem",
             backgroundColor: "transparent",
             color: "hsl(var(--foreground) / 1)",
           },
-          ".cm-panel.cm-search label": {
-            display: "inline-flex",
+          ".cm-panel.cm-search.cm-search-custom .cm-searchRow": {
+            display: "grid",
+            gridTemplateColumns: "minmax(16rem, 1fr) auto auto auto",
             alignItems: "center",
-            gap: "0.35rem",
-            fontSize: "0.75rem",
-            color: "hsl(var(--muted-foreground) / 1)",
+            columnGap: "0.45rem",
+            minWidth: "0",
           },
-          ".cm-panel.cm-search input:not([type='checkbox'])": {
+          ".cm-panel.cm-search.cm-search-custom .cm-searchInputWrap": {
+            position: "relative",
+            minWidth: "0",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchInput": {
+            width: "100%",
             minHeight: "1.9rem",
             borderRadius: "0.375rem",
             border: "1px solid hsl(var(--input) / 1)",
             backgroundColor: "hsl(var(--background) / 1)",
             color: "hsl(var(--foreground) / 1)",
-            padding: "0 0.55rem",
+            padding: "0 4.45rem 0 0.6rem",
             fontSize: "0.8rem",
             lineHeight: "1.1",
             outline: "none",
             transition: "border-color 120ms ease, box-shadow 120ms ease",
           },
-          ".cm-panel.cm-search input:not([type='checkbox'])::placeholder": {
-            color: "hsl(var(--muted-foreground) / 0.85)",
+          ".cm-panel.cm-search.cm-search-custom .cm-replaceInput": {
+            width: "100%",
+            minHeight: "1.9rem",
+            borderRadius: "0.375rem",
+            border: "1px solid hsl(var(--input) / 1)",
+            backgroundColor: "hsl(var(--background) / 1)",
+            color: "hsl(var(--foreground) / 1)",
+            padding: "0 0.6rem",
+            fontSize: "0.8rem",
+            lineHeight: "1.1",
+            outline: "none",
+            transition: "border-color 120ms ease, box-shadow 120ms ease",
           },
-          ".cm-panel.cm-search input:not([type='checkbox']):focus": {
-            borderColor: "hsl(var(--ring) / 1)",
-            boxShadow: "0 0 0 2px hsl(var(--ring) / 0.3)",
-          },
-          ".cm-panel.cm-search input.cm-invalid": {
+          ".cm-panel.cm-search.cm-search-custom .cm-searchInput::placeholder, .cm-panel.cm-search.cm-search-custom .cm-replaceInput::placeholder":
+            {
+              color: "hsl(var(--muted-foreground) / 0.85)",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchInput:focus, .cm-panel.cm-search.cm-search-custom .cm-replaceInput:focus":
+            {
+              borderColor: "hsl(var(--ring) / 1)",
+              boxShadow: "0 0 0 2px hsl(var(--ring) / 0.3)",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchInput.cm-invalid": {
             borderColor: "hsl(var(--destructive) / 0.9)",
             boxShadow: "0 0 0 2px hsl(var(--destructive) / 0.2)",
           },
-          ".cm-panel.cm-search input[type='checkbox']": {
-            width: "0.85rem",
-            height: "0.85rem",
-            margin: "0",
-            accentColor: "hsl(var(--primary) / 1)",
-            transform: "translateY(-0.5px)",
-          },
-          ".cm-panel.cm-search input[name='search']": {
-            gridColumn: "1",
-            gridRow: "1",
-            width: "100%",
-          },
-          ".cm-panel.cm-search button": {
-            minHeight: "1.9rem",
-            borderRadius: "0.375rem",
-            border: "1px solid hsl(var(--border) / 1)",
-            backgroundColor: "hsl(var(--background) / 1)",
-            color: "hsl(var(--foreground) / 1)",
-            padding: "0.15rem 0.55rem",
-            fontSize: "0.75rem",
-            lineHeight: "1.1",
-            cursor: "pointer",
-            transition:
-              "background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
-          },
-          ".cm-panel.cm-search button:hover": {
-            backgroundColor: "hsl(var(--accent) / 1)",
-            color: "hsl(var(--accent-foreground) / 1)",
-          },
-          ".cm-panel.cm-search button:focus-visible": {
-            borderColor: "hsl(var(--ring) / 1)",
-            boxShadow: "0 0 0 2px hsl(var(--ring) / 0.3)",
-            outline: "none",
-          },
-          ".cm-panel.cm-search button:disabled": {
-            opacity: "0.55",
-            cursor: "not-allowed",
-          },
-          ".cm-panel.cm-search .cm-searchMessage": {
-            fontSize: "0.75rem",
-            color: "hsl(var(--muted-foreground) / 1)",
-            gridColumn: "1 / -1",
-            gridRow: "3",
-          },
-          ".cm-panel.cm-search button[name='next']": {
-            gridColumn: "2",
-            gridRow: "1",
-          },
-          ".cm-panel.cm-search button[name='prev']": {
-            gridColumn: "3",
-            gridRow: "1",
-          },
-          ".cm-panel.cm-search button[name='select']": {
-            gridColumn: "4",
-            gridRow: "1",
-          },
-          ".cm-panel.cm-search button[name='close']": {
-            gridColumn: "9",
-            gridRow: "1",
-            width: "2rem",
-            minWidth: "2rem",
-            minHeight: "2rem",
-            padding: "0",
+          ".cm-panel.cm-search.cm-search-custom .cm-searchToggleGroup": {
+            position: "absolute",
+            right: "0.35rem",
+            top: "50%",
+            transform: "translateY(-50%)",
             display: "inline-flex",
             alignItems: "center",
-            justifyContent: "center",
+            gap: "0.2rem",
           },
-          ".cm-panel.cm-search input[name='replace']": {
-            gridColumn: "1",
-            gridRow: "2",
-            width: "100%",
+          ".cm-panel.cm-search.cm-search-custom .cm-searchToggle": {
+            minWidth: "1.25rem",
+            minHeight: "1.25rem",
+            borderRadius: "0.25rem",
+            border: "1px solid transparent",
+            backgroundColor: "transparent",
+            color: "hsl(var(--muted-foreground) / 1)",
+            padding: "0 0.2rem",
+            fontSize: "0.68rem",
+            lineHeight: "1",
+            cursor: "pointer",
+            transition:
+              "color 120ms ease, background-color 120ms ease, border-color 120ms ease",
           },
-          ".cm-panel.cm-search button[name='replace']": {
-            gridColumn: "2",
-            gridRow: "2",
+          ".cm-panel.cm-search.cm-search-custom .cm-searchToggle.cm-active": {
+            color: "hsl(var(--primary-foreground) / 1)",
+            backgroundColor: "hsl(var(--primary) / 1)",
+            borderColor: "hsl(var(--primary) / 0.85)",
           },
-          ".cm-panel.cm-search button[name='replaceAll']": {
-            gridColumn: "3",
-            gridRow: "2",
+          ".cm-panel.cm-search.cm-search-custom .cm-searchCounter": {
+            minWidth: "4.1rem",
+            textAlign: "right",
+            fontSize: "0.75rem",
+            color: "hsl(var(--muted-foreground) / 1)",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchNav": {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchIconButton, .cm-panel.cm-search.cm-search-custom .cm-searchCloseButton, .cm-panel.cm-search.cm-search-custom .cm-searchReplaceButton":
+            {
+              minHeight: "1.9rem",
+              borderRadius: "0.375rem",
+              border: "1px solid hsl(var(--border) / 1)",
+              backgroundColor: "hsl(var(--background) / 1)",
+              color: "hsl(var(--foreground) / 1)",
+              padding: "0 0.5rem",
+              fontSize: "0.82rem",
+              lineHeight: "1",
+              cursor: "pointer",
+              transition:
+                "background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchIconButton": {
+            minWidth: "1.9rem",
+            padding: "0",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchCloseButton": {
+            minWidth: "1.9rem",
+            padding: "0",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchReplaceButton": {
+            minWidth: "2.2rem",
+            padding: "0 0.45rem",
+            fontSize: "0.72rem",
+            letterSpacing: "0.02em",
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchIconButton:hover, .cm-panel.cm-search.cm-search-custom .cm-searchCloseButton:hover, .cm-panel.cm-search.cm-search-custom .cm-searchReplaceButton:hover":
+            {
+              backgroundColor: "hsl(var(--accent) / 1)",
+              color: "hsl(var(--accent-foreground) / 1)",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchIconButton:focus-visible, .cm-panel.cm-search.cm-search-custom .cm-searchCloseButton:focus-visible, .cm-panel.cm-search.cm-search-custom .cm-searchReplaceButton:focus-visible, .cm-panel.cm-search.cm-search-custom .cm-searchToggle:focus-visible":
+            {
+              borderColor: "hsl(var(--ring) / 1)",
+              boxShadow: "0 0 0 2px hsl(var(--ring) / 0.3)",
+              outline: "none",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchIconButton:disabled, .cm-panel.cm-search.cm-search-custom .cm-searchCloseButton:disabled, .cm-panel.cm-search.cm-search-custom .cm-searchReplaceButton:disabled":
+            {
+              opacity: "0.55",
+              cursor: "not-allowed",
+            },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchReplaceRow": {
+            display: "grid",
+            gridTemplateColumns: "minmax(16rem, 1fr) auto auto",
+            alignItems: "center",
+            columnGap: "0.45rem",
+            minWidth: "0",
           },
           ".cm-tooltip.cm-tooltip-readonly-edit": {
             maxWidth: "22rem",

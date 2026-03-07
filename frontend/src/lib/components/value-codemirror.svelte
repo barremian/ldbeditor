@@ -791,6 +791,9 @@
     if (!readOnly) {
       clearReadOnlyTooltipTimeout();
       hideReadOnlyTooltip();
+    } else {
+      // Ensure transient search UI is dismissed when leaving edit mode.
+      closeSearchPanel(view);
     }
     appliedReadOnly = readOnly;
   }

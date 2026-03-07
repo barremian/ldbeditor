@@ -90,6 +90,7 @@
   });
   const readOnlyTooltipDurationMs = 1800;
   const readOnlyTooltipThrottleMs = 250;
+  const searchToggleTooltipDelayMs = 90;
 
   let hostElement: HTMLDivElement | null = null;
   let view: EditorView | null = null;
@@ -367,10 +368,12 @@
       button.type = "button";
       button.className = className;
       button.textContent = text;
-      button.title = ariaLabel;
       button.setAttribute("aria-label", ariaLabel);
       if (toggle) {
         button.setAttribute("aria-pressed", "false");
+        button.setAttribute("data-tooltip", ariaLabel);
+      } else {
+        button.title = ariaLabel;
       }
       button.addEventListener("click", onClick);
       return button;
@@ -629,9 +632,40 @@
             fontSize: "0.68rem",
             lineHeight: "1",
             cursor: "pointer",
+            position: "relative",
             transition:
               "color 120ms ease, background-color 120ms ease, border-color 120ms ease",
           },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchToggle::after": {
+            content: "attr(data-tooltip)",
+            position: "absolute",
+            left: "50%",
+            top: "calc(100% + 0.35rem)",
+            transform: "translate(-50%, -0.2rem)",
+            borderRadius: "0.25rem",
+            backgroundColor: "hsl(var(--popover) / 1)",
+            color: "hsl(var(--popover-foreground) / 1)",
+            border: "1px solid hsl(var(--primary) / 0.65)",
+            boxShadow:
+              "0 10px 20px hsl(var(--foreground) / 0.18), 0 0 0 1px hsl(var(--background) / 0.65)",
+            padding: "0.3rem 0.55rem",
+            fontSize: "0.8rem",
+            fontWeight: "400",
+            lineHeight: "1.2",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            opacity: "0",
+            visibility: "hidden",
+            zIndex: "15",
+            transition: `opacity 100ms ease ${searchToggleTooltipDelayMs}ms, transform 100ms ease ${searchToggleTooltipDelayMs}ms, visibility 0s linear ${searchToggleTooltipDelayMs}ms`,
+          },
+          ".cm-panel.cm-search.cm-search-custom .cm-searchToggle:hover::after, .cm-panel.cm-search.cm-search-custom .cm-searchToggle:focus-visible::after":
+            {
+              opacity: "1",
+              visibility: "visible",
+              transform: "translate(-50%, 0.05rem)",
+              transitionDelay: "0ms",
+            },
           ".cm-panel.cm-search.cm-search-custom .cm-searchToggle.cm-active": {
             color: "hsl(var(--primary-foreground) / 1)",
             backgroundColor: "hsl(var(--primary) / 1)",

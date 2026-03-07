@@ -236,6 +236,12 @@
     autoRefreshIntervalMs > 0
       ? Math.max(0, Math.min(1, remainingAutoRefreshMs / autoRefreshIntervalMs))
       : 1;
+  $: canSaveValueChanges =
+    selectedKey !== null &&
+    isValueEditing &&
+    !effectiveReadOnly &&
+    !isSaving &&
+    !valueValidationError;
 
   function scheduleDebouncedKeySearch(value: string) {
     if (keySearchDebounceTimeout) {
@@ -1074,13 +1080,14 @@
   async function acceptRemoteConflictValue(
     key: string,
     currentValueExists: boolean,
-    currentValue: string
+    currentValue: string,
+    closeEditorAfterResolve: boolean
   ) {
     if (currentValueExists) {
       originalValueRaw = currentValue;
       editorValueRaw = currentValue;
       syncEditorDisplayWithRawValue();
-      isValueEditing = false;
+      isValueEditing = !closeEditorAfterResolve;
       return;
     }
 
@@ -1095,15 +1102,21 @@
     }
 
     await fetchValueForSelectedKey(key);
+    if (selectedKey === key) {
+      isValueEditing = !closeEditorAfterResolve;
+    }
   }
 
-  async function saveValue() {
+  async function saveValue({
+    closeEditorOnSuccess,
+  }: {
+    closeEditorOnSuccess: boolean;
+  }) {
     if (
       !selectedKey ||
       !isValueEditing ||
       isSaving ||
       effectiveReadOnly ||
-      !isDirty ||
       valueValidationError
     ) {
       return;
@@ -1142,14 +1155,15 @@
           }
           originalValueRaw = localValueRaw;
           syncEditorDisplayWithRawValue();
-          isValueEditing = false;
+          isValueEditing = !closeEditorOnSuccess;
           return;
         }
 
         await acceptRemoteConflictValue(
           keyToSave,
           saveResult.currentValueExists,
-          saveResult.currentValue
+          saveResult.currentValue,
+          closeEditorOnSuccess
         );
         return;
       }
@@ -1160,7 +1174,7 @@
 
       originalValueRaw = localValueRaw;
       syncEditorDisplayWithRawValue();
-      isValueEditing = false;
+      isValueEditing = !closeEditorOnSuccess;
     } catch (err) {
       await Dialogs.Error({
         Title: "Save failed",
@@ -1169,6 +1183,14 @@
     } finally {
       isSaving = false;
     }
+  }
+
+  async function saveValueOnly() {
+    await saveValue({ closeEditorOnSuccess: false });
+  }
+
+  async function saveValueAndClose() {
+    await saveValue({ closeEditorOnSuccess: true });
   }
 
   function revertValueChanges() {
@@ -1347,16 +1369,9 @@
       }
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        if (
-          selectedKey &&
-          isValueEditing &&
-          isDirty &&
-          !effectiveReadOnly &&
-          !isSaving &&
-          !valueValidationError
-        ) {
+        if (canSaveValueChanges) {
           event.preventDefault();
-          void saveValue();
+          void saveValueOnly();
         }
         return;
       }
@@ -1907,19 +1922,31 @@
                   <Badge variant="secondary">Unsaved</Badge>
                 {/if}
                 {#if isValueEditing}
-                  <Button
+                  <SplitButton
                     size="sm"
-                    class="gap-1.5"
-                    disabled={!selectedKey ||
-                      !isDirty ||
-                      !!valueValidationError ||
-                      isSaving ||
-                      effectiveReadOnly}
-                    on:click={saveValue}
+                    triggerLabel="Save options"
+                    disabled={!canSaveValueChanges}
+                    primaryClass="gap-1.5 border-r-0 pr-2"
+                    triggerClass="w-8 px-0"
+                    triggerIconClass="h-3.5 w-3.5"
+                    on:primary={() => {
+                      void saveValueOnly();
+                    }}
                   >
-                    <Save class="h-3.5 w-3.5" />
-                    {isSaving ? "Saving…" : "Save"}
-                  </Button>
+                    <span class="inline-flex items-center gap-1.5">
+                      <Save class="h-3.5 w-3.5" />
+                      {isSaving ? "Saving…" : "Save"}
+                    </span>
+                    <DropdownMenuItem
+                      slot="menu"
+                      disabled={!canSaveValueChanges}
+                      on:click={() => {
+                        void saveValueAndClose();
+                      }}
+                    >
+                      Save & Close
+                    </DropdownMenuItem>
+                  </SplitButton>
                   <Button
                     variant="outline"
                     size="sm"

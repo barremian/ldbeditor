@@ -406,6 +406,7 @@
     private keydown(event: KeyboardEvent) {
       if (runScopeHandlers(this.view, event, "search-panel")) {
         event.preventDefault();
+        event.stopPropagation();
       } else if (event.key === "Enter" && event.target === this.searchField) {
         event.preventDefault();
         (event.shiftKey ? findPrevious : findNext)(this.view);

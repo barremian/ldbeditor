@@ -1342,6 +1342,10 @@
     window.addEventListener("resize", onWindowResize);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         if (
           selectedKey &&

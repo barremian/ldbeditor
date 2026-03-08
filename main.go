@@ -28,6 +28,10 @@ func init() {
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	const settingsWindowName = "settings"
+	const settingsShortcut = "CmdOrCtrl+,"
+
+	var showSettingsWindow func()
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -47,7 +51,66 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		KeyBindings: map[string]func(window application.Window){
+			settingsShortcut: func(window application.Window) {
+				if showSettingsWindow != nil {
+					showSettingsWindow()
+				}
+			},
+		},
 	})
+
+	showSettingsWindow = func() {
+		settingsWindow, exists := app.Window.GetByName(settingsWindowName)
+		if !exists {
+			settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
+				Name:      settingsWindowName,
+				Title:     "Settings",
+				Width:     860,
+				Height:    620,
+				MinWidth:  700,
+				MinHeight: 500,
+				Hidden:    true,
+				URL:       "/settings",
+				Mac: application.MacWindow{
+					Backdrop: application.MacBackdropTranslucent,
+					TitleBar: application.MacTitleBarDefault,
+				},
+			})
+		}
+		if settingsWindow.IsMinimised() {
+			settingsWindow.UnMinimise()
+		}
+		settingsWindow.Show()
+		settingsWindow.Focus()
+	}
+
+	menu := app.Menu.New()
+
+	appMenu := menu.AddSubmenu("LevelDB Editor")
+	appMenu.AddRole(application.About)
+	appMenu.AddSeparator()
+	appMenu.Add("Settings...").
+		SetAccelerator(settingsShortcut).
+		OnClick(func(_ *application.Context) {
+			showSettingsWindow()
+		})
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.ServicesMenu)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Hide)
+	appMenu.AddRole(application.HideOthers)
+	appMenu.AddRole(application.UnHide)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Quit)
+
+	fileMenu := menu.AddSubmenu("File")
+	fileMenu.AddRole(application.CloseWindow)
+	menu.AddRole(application.EditMenu)
+	menu.AddRole(application.ViewMenu)
+	menu.AddRole(application.WindowMenu)
+	menu.AddRole(application.HelpMenu)
+	app.Menu.Set(menu)
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.
@@ -55,8 +118,9 @@ func main() {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "LevelDB Editor",
-		Width: 1400,
+		Name:   "main",
+		Title:  "LevelDB Editor",
+		Width:  1400,
 		Height: 900,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,

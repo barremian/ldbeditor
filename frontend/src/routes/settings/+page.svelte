@@ -17,9 +17,6 @@
   ];
 
   let preferredTheme: ThemePreference = "system";
-  let compactDensity = false;
-  let showStatusBadges = true;
-
   let unsubscribeThemePreference = () => {};
 
   onMount(() => {
@@ -69,27 +66,6 @@
       </select>
     </div>
 
-    <div class="divider"></div>
-
-    <div class="settings-row checkbox-row">
-      <label for="compact-density">Use compact spacing in list views</label>
-      <input
-        id="compact-density"
-        type="checkbox"
-        bind:checked={compactDensity}
-      />
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="settings-row checkbox-row">
-      <label for="status-badges">Show status badges in tabs</label>
-      <input
-        id="status-badges"
-        type="checkbox"
-        bind:checked={showStatusBadges}
-      />
-    </div>
   </section>
 </main>
 
@@ -198,16 +174,4 @@
     outline: none;
   }
 
-  .divider {
-    background: hsl(var(--border));
-    height: 1px;
-    width: 100%;
-  }
-
-  .checkbox-row input[type="checkbox"] {
-    accent-color: hsl(var(--primary));
-    height: 16px;
-    margin: 0;
-    width: 16px;
-  }
 </style>

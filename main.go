@@ -64,17 +64,24 @@ func main() {
 		settingsWindow, exists := app.Window.GetByName(settingsWindowName)
 		if !exists {
 			settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-				Name:      settingsWindowName,
-				Title:     "Settings",
-				Width:     860,
-				Height:    620,
-				MinWidth:  700,
-				MinHeight: 500,
-				Hidden:    true,
-				URL:       "/settings",
+				Name:                settingsWindowName,
+				Title:               "Preferences",
+				Width:               860,
+				Height:              620,
+				MinWidth:            860,
+				MinHeight:           620,
+				MaxWidth:            860,
+				MaxHeight:           620,
+				DisableResize:       true,
+				MinimiseButtonState: application.ButtonDisabled,
+				MaximiseButtonState: application.ButtonDisabled,
+				Hidden:              true,
+				BackgroundColour:    application.NewRGB(242, 242, 247),
+				URL:                 "/settings",
 				Mac: application.MacWindow{
-					Backdrop: application.MacBackdropTranslucent,
-					TitleBar: application.MacTitleBarDefault,
+					Backdrop:           application.MacBackdropNormal,
+					TitleBar:           application.MacTitleBarDefault,
+					CollectionBehavior: application.MacWindowCollectionBehaviorFullScreenNone,
 				},
 			})
 		}

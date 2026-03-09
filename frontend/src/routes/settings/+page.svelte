@@ -1,193 +1,179 @@
 <script lang="ts">
-  import { Browser } from "@wailsio/runtime";
-  import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-  } from "$lib/components/ui/card";
-  import { Button } from "$lib/components/ui/button";
-  import { Tabs, TabsContent, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
+  type ToolbarItem = {
+    id: "general" | "appearance" | "donation";
+    label: string;
+    visible: boolean;
+    isActive: boolean;
+  };
 
-  const DONATION_URL = "https://github.com/sponsors/barremian";
-
-  let launchOnStartup = true;
-  let openEmptyWindowMode = "new";
-  let autosaveWithVersions = true;
-  let externalChangesMode = "update";
+  // Keep General and Donation entries in-place for easy reactivation later.
+  const toolbarItems: ToolbarItem[] = [
+    { id: "general", label: "General", visible: false, isActive: false },
+    { id: "appearance", label: "Appearance", visible: true, isActive: true },
+    { id: "donation", label: "Donation", visible: false, isActive: false },
+  ];
 
   let preferredTheme = "system";
   let compactDensity = false;
   let showStatusBadges = true;
-
-  let isOpeningDonation = false;
-
-  async function openDonationPage() {
-    isOpeningDonation = true;
-    try {
-      await Browser.OpenURL(DONATION_URL);
-    } finally {
-      isOpeningDonation = false;
-    }
-  }
 </script>
 
-<main class="flex min-h-screen flex-col bg-background text-foreground">
-  <header class="border-b border-border/80 bg-muted/20 px-6 py-4">
-    <h1 class="text-base font-semibold">Settings</h1>
-    <p class="mt-1 text-xs text-muted-foreground">
-      Configure LevelDB Editor preferences.
-    </p>
-  </header>
-
-  <div class="min-h-0 flex-1 overflow-auto p-6">
-    <Tabs value="general" class="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <TabsList class="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0">
-        <TabsTrigger
-          value="general"
-          class="justify-center rounded-md border border-border/70 bg-background py-2 text-sm data-[state=active]:border-primary/40 data-[state=active]:bg-muted/70"
+<main class="preferences-window">
+  <section class="preferences-toolbar">
+    {#each toolbarItems as item (item.id)}
+      {#if item.visible}
+        <button
+          type="button"
+          class="toolbar-item"
+          class:is-active={item.isActive}
         >
-          General
-        </TabsTrigger>
-        <TabsTrigger
-          value="appearance"
-          class="justify-center rounded-md border border-border/70 bg-background py-2 text-sm data-[state=active]:border-primary/40 data-[state=active]:bg-muted/70"
-        >
-          Appearance
-        </TabsTrigger>
-        <TabsTrigger
-          value="donation"
-          class="justify-center rounded-md border border-border/70 bg-background py-2 text-sm data-[state=active]:border-primary/40 data-[state=active]:bg-muted/70"
-        >
-          Donation
-        </TabsTrigger>
-      </TabsList>
+          <span class="icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path
+                d="M8.5 4h7l1.6 2.2 2.6.7v3l-2.6.7L15.5 13h-7L6.9 10.6 4.3 9.9v-3l2.6-.7L8.5 4zM12 9.2a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zM7.2 14.4l1.8 1.2h6l1.8-1.2 1.2 1.8-1.8 1.2v2.1h-2.2l-.9-1.4h-2.2l-.9 1.4H7.8v-2.1L6 16.2l1.2-1.8z"
+              />
+            </svg>
+          </span>
+          <span>{item.label}</span>
+        </button>
+      {/if}
+    {/each}
+  </section>
 
-      <TabsContent value="general" class="mt-0">
-        <Card class="border-border/70">
-          <CardHeader>
-            <CardTitle class="text-base">General</CardTitle>
-            <CardDescription>
-              Startup and document behavior preferences.
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-6 text-sm">
-            <label class="flex items-center gap-3">
-              <input type="checkbox" bind:checked={launchOnStartup} />
-              <span>Reopen windows from last session</span>
-            </label>
+  <section class="preferences-content">
+    <div class="settings-row">
+      <label for="theme-select">Theme</label>
+      <select id="theme-select" bind:value={preferredTheme}>
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
 
-            <div class="space-y-2">
-              <p class="font-medium">When nothing else is open:</p>
-              <select
-                bind:value={openEmptyWindowMode}
-                class="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="new">Create New Document</option>
-                <option value="open">Show Open Dialog</option>
-                <option value="none">No Action</option>
-              </select>
-            </div>
+    <div class="divider"></div>
 
-            <label class="flex items-center gap-3">
-              <input type="checkbox" bind:checked={autosaveWithVersions} />
-              <span>Enable Auto Save with Versions</span>
-            </label>
+    <div class="settings-row checkbox-row">
+      <label for="compact-density">Use compact spacing in list views</label>
+      <input
+        id="compact-density"
+        type="checkbox"
+        bind:checked={compactDensity}
+      />
+    </div>
 
-            <fieldset class="space-y-2">
-              <legend class="font-medium">
-                When document is changed by another application:
-              </legend>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="external-changes"
-                  value="keep"
-                  bind:group={externalChangesMode}
-                />
-                <span>Keep current editor content</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="external-changes"
-                  value="ask"
-                  bind:group={externalChangesMode}
-                />
-                <span>Ask how to resolve</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="external-changes"
-                  value="update"
-                  bind:group={externalChangesMode}
-                />
-                <span>Update to modified edition</span>
-              </label>
-            </fieldset>
-          </CardContent>
-        </Card>
-      </TabsContent>
+    <div class="divider"></div>
 
-      <TabsContent value="appearance" class="mt-0">
-        <Card class="border-border/70">
-          <CardHeader>
-            <CardTitle class="text-base">Appearance</CardTitle>
-            <CardDescription>
-              Choose theme and visual density for the editor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-6 text-sm">
-            <div class="space-y-2">
-              <p class="font-medium">Theme</p>
-              <select
-                bind:value={preferredTheme}
-                class="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-
-            <label class="flex items-center gap-3">
-              <input type="checkbox" bind:checked={compactDensity} />
-              <span>Use compact spacing in list views</span>
-            </label>
-
-            <label class="flex items-center gap-3">
-              <input type="checkbox" bind:checked={showStatusBadges} />
-              <span>Show status badges in tabs</span>
-            </label>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="donation" class="mt-0">
-        <Card class="border-border/70">
-          <CardHeader>
-            <CardTitle class="text-base">Donation</CardTitle>
-            <CardDescription>
-              Support continued development of LevelDB Editor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-4 text-sm">
-            <p class="text-muted-foreground">
-              If this app saves you time, supporting it helps keep improvements and
-              maintenance moving.
-            </p>
-            <Button
-              type="button"
-              on:click={openDonationPage}
-              disabled={isOpeningDonation}
-            >
-              {isOpeningDonation ? "Opening..." : "Open sponsorship page"}
-            </Button>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
-  </div>
+    <div class="settings-row checkbox-row">
+      <label for="status-badges">Show status badges in tabs</label>
+      <input
+        id="status-badges"
+        type="checkbox"
+        bind:checked={showStatusBadges}
+      />
+    </div>
+  </section>
 </main>
+
+<style>
+  .preferences-window {
+    min-height: 100vh;
+    background: #f2f2f7;
+    color: #1e1e1e;
+    font-size: 13px;
+  }
+
+  .preferences-toolbar {
+    border-bottom: 1px solid #d8d8de;
+    display: flex;
+    justify-content: center;
+    padding: 8px 24px 10px;
+  }
+
+  .toolbar-item {
+    align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    color: #4a4a4f;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    gap: 5px;
+    min-width: 108px;
+    padding: 8px 10px;
+  }
+
+  .toolbar-item.is-active {
+    background: #e8f1ff;
+    color: #0a84ff;
+  }
+
+  .icon-wrap {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  .icon-wrap svg {
+    fill: currentColor;
+    height: 22px;
+    width: 22px;
+  }
+
+  .preferences-content {
+    margin: 0 auto;
+    max-width: 780px;
+    padding: 26px 34px;
+  }
+
+  .settings-row {
+    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    min-height: 44px;
+  }
+
+  .settings-row label {
+    color: #222226;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .settings-row select {
+    appearance: none;
+    background:
+      linear-gradient(45deg, transparent 50%, #636369 50%),
+      linear-gradient(135deg, #636369 50%, transparent 50%),
+      linear-gradient(to right, #fdfdff, #fdfdff);
+    background-position:
+      calc(100% - 14px) 50%,
+      calc(100% - 9px) 50%,
+      0 0;
+    background-repeat: no-repeat;
+    background-size:
+      5px 5px,
+      5px 5px,
+      100% 100%;
+    border: 1px solid #c8c8ce;
+    border-radius: 8px;
+    color: #222226;
+    font-size: 13px;
+    min-width: 180px;
+    padding: 7px 28px 7px 10px;
+  }
+
+  .divider {
+    background: #d6d6dc;
+    height: 1px;
+    width: 100%;
+  }
+
+  .checkbox-row input[type="checkbox"] {
+    accent-color: #0a84ff;
+    height: 16px;
+    margin: 0;
+    width: 16px;
+  }
+</style>

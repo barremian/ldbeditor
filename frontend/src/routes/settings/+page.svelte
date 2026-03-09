@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
+  import { themePreference, type ThemePreference } from "$lib/theme";
+
   type ToolbarItem = {
     id: "general" | "appearance" | "donation";
     label: string;
@@ -13,9 +16,21 @@
     { id: "donation", label: "Donation", visible: false, isActive: false },
   ];
 
-  let preferredTheme = "system";
+  let preferredTheme: ThemePreference = "system";
   let compactDensity = false;
   let showStatusBadges = true;
+
+  let unsubscribeThemePreference = () => {};
+
+  onMount(() => {
+    unsubscribeThemePreference = themePreference.subscribe((value) => {
+      preferredTheme = value;
+    });
+  });
+
+  onDestroy(() => {
+    unsubscribeThemePreference();
+  });
 </script>
 
 <main class="preferences-window">
@@ -43,7 +58,11 @@
   <section class="preferences-content">
     <div class="settings-row">
       <label for="theme-select">Theme</label>
-      <select id="theme-select" bind:value={preferredTheme}>
+      <select
+        id="theme-select"
+        bind:value={preferredTheme}
+        on:change={() => themePreference.set(preferredTheme)}
+      >
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
@@ -77,13 +96,13 @@
 <style>
   .preferences-window {
     min-height: 100vh;
-    background: #f2f2f7;
-    color: #1e1e1e;
+    background: hsl(var(--muted) / 0.55);
+    color: hsl(var(--foreground));
     font-size: 13px;
   }
 
   .preferences-toolbar {
-    border-bottom: 1px solid #d8d8de;
+    border-bottom: 1px solid hsl(var(--border));
     display: flex;
     justify-content: center;
     padding: 8px 24px 10px;
@@ -94,7 +113,7 @@
     background: transparent;
     border: none;
     border-radius: 10px;
-    color: #4a4a4f;
+    color: hsl(var(--muted-foreground));
     cursor: default;
     display: flex;
     flex-direction: column;
@@ -104,9 +123,14 @@
     padding: 8px 10px;
   }
 
+  .toolbar-item:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+
   .toolbar-item.is-active {
-    background: #e8f1ff;
-    color: #0a84ff;
+    background: hsl(var(--primary) / 0.14);
+    color: hsl(var(--primary));
   }
 
   .icon-wrap {
@@ -136,7 +160,7 @@
   }
 
   .settings-row label {
-    color: #222226;
+    color: hsl(var(--foreground));
     font-size: 14px;
     line-height: 1.35;
   }
@@ -144,9 +168,9 @@
   .settings-row select {
     appearance: none;
     background:
-      linear-gradient(45deg, transparent 50%, #636369 50%),
-      linear-gradient(135deg, #636369 50%, transparent 50%),
-      linear-gradient(to right, #fdfdff, #fdfdff);
+      linear-gradient(45deg, transparent 50%, hsl(var(--muted-foreground)) 50%),
+      linear-gradient(135deg, hsl(var(--muted-foreground)) 50%, transparent 50%),
+      linear-gradient(to right, hsl(var(--background)), hsl(var(--background)));
     background-position:
       calc(100% - 14px) 50%,
       calc(100% - 9px) 50%,
@@ -156,22 +180,32 @@
       5px 5px,
       5px 5px,
       100% 100%;
-    border: 1px solid #c8c8ce;
+    border: 1px solid hsl(var(--input));
     border-radius: 8px;
-    color: #222226;
+    color: hsl(var(--foreground));
     font-size: 13px;
     min-width: 180px;
     padding: 7px 28px 7px 10px;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease;
+  }
+
+  .settings-row select:focus-visible {
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25);
+    outline: none;
   }
 
   .divider {
-    background: #d6d6dc;
+    background: hsl(var(--border));
     height: 1px;
     width: 100%;
   }
 
   .checkbox-row input[type="checkbox"] {
-    accent-color: #0a84ff;
+    accent-color: hsl(var(--primary));
     height: 16px;
     margin: 0;
     width: 16px;

@@ -1625,7 +1625,7 @@
     >
       {#if dbForcedReadOnly}
         <div
-          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
+          class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
           role="status"
           aria-live="polite"
         >

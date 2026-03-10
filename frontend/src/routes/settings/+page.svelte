@@ -72,7 +72,11 @@
 <style>
   .preferences-window {
     min-height: 100vh;
-    background: hsl(var(--muted) / 0.55);
+    background: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(var(--muted) / 0.42) 100%
+    );
     color: hsl(var(--foreground));
     font-size: 13px;
   }
@@ -97,6 +101,10 @@
     gap: 5px;
     min-width: 108px;
     padding: 8px 10px;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease;
   }
 
   .toolbar-item:focus-visible {
@@ -105,8 +113,9 @@
   }
 
   .toolbar-item.is-active {
-    background: hsl(var(--primary) / 0.14);
-    color: hsl(var(--primary));
+    background: hsl(var(--accent) / 0.72);
+    border: 1px solid hsl(var(--border) / 0.9);
+    color: hsl(var(--foreground));
   }
 
   .icon-wrap {
@@ -146,7 +155,7 @@
     background:
       linear-gradient(45deg, transparent 50%, hsl(var(--muted-foreground)) 50%),
       linear-gradient(135deg, hsl(var(--muted-foreground)) 50%, transparent 50%),
-      linear-gradient(to right, hsl(var(--background)), hsl(var(--background)));
+      linear-gradient(to right, hsl(var(--card)), hsl(var(--card)));
     background-position:
       calc(100% - 14px) 50%,
       calc(100% - 9px) 50%,
@@ -170,7 +179,7 @@
 
   .settings-row select:focus-visible {
     border-color: hsl(var(--ring));
-    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.22);
     outline: none;
   }
 

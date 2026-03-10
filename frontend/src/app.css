@@ -43,37 +43,38 @@
 
   :root.dark,
   :root[data-theme="dark"] {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* VS Code Dark-inspired token roles: bg #1e1e1e, surfaces #252526/#2d2d2d, text #d4d4d4 */
+    --background: 240 3% 12%;
+    --foreground: 0 0% 83%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 240 3% 18%;
+    --muted-foreground: 0 0% 68%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 240 3% 15%;
+    --popover-foreground: 0 0% 83%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 240 3% 15%;
+    --card-foreground: 0 0% 83%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 240 2% 27%;
+    --input: 240 2% 27%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 207 100% 42%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 3% 20%;
+    --secondary-foreground: 0 0% 83%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 240 3% 20%;
+    --accent-foreground: 0 0% 83%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 47%;
+    --destructive-foreground: 0 0% 98%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 48 96% 89%;
+    --warning-foreground: 35 95% 14%;
 
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 207 100% 42%;
   }
 }
 

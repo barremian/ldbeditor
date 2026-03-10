@@ -1425,11 +1425,11 @@
 {#if dbPath}
   <div class="editor-layout flex h-screen flex-col">
     <div
-      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-sm"
+      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/55 backdrop-blur-sm"
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/80 pt-2 backdrop-blur-sm">
+    <div class="bg-background/60 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs
           value={activeTabId}
@@ -1494,7 +1494,7 @@
       </ScrollArea>
     </div>
     <header
-      class="relative z-40 overflow-visible bg-background/80 px-4 pt-3 pb-2 backdrop-blur-sm"
+      class="relative z-40 overflow-visible bg-background/60 px-4 pt-3 pb-2 backdrop-blur-sm"
     >
       <div
         class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
@@ -1588,7 +1588,7 @@
             <DropdownMenuItem
               slot="menu"
               class={`flex items-center justify-between ${
-                prettyPrintJson ? "bg-muted/80" : ""
+                prettyPrintJson ? "bg-muted/60" : ""
               }`}
               on:click={(event) => {
                 event.preventDefault();
@@ -2067,12 +2067,12 @@
 
       {#if showEditorLoadingOverlay}
         <div
-          class="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/45 backdrop-blur-md supports-[backdrop-filter]:bg-background/35"
+          class="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-muted/35 backdrop-blur-md supports-[backdrop-filter]:bg-muted/25"
         >
           <div
             role="status"
             aria-live="polite"
-            class="flex items-center gap-2 rounded-full border border-border/80 bg-background/95 px-4 py-2 text-sm font-medium text-foreground shadow-lg ring-1 ring-border/40"
+            class="flex items-center gap-2 rounded-full border border-border/80 bg-card/92 px-4 py-2 text-sm font-medium text-foreground shadow-lg ring-1 ring-border/40"
           >
             <RefreshCcw class="h-4 w-4 animate-spin" />
             <span>{editorLoadingOverlayText}</span>
@@ -2084,11 +2084,11 @@
 {:else}
   <div class="flex h-screen flex-col">
     <div
-      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-sm"
+      class="titlebar-drag-region shrink-0 border-b border-border/50 bg-background/55 backdrop-blur-sm"
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/80 pt-2 backdrop-blur-sm">
+    <div class="bg-background/60 pt-2 backdrop-blur-sm">
       <ScrollArea orientation="horizontal" class="w-full">
         <Tabs
           value={activeTabId}
@@ -2261,7 +2261,7 @@
 
 {#if keyPendingDelete}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-background/55 p-4 backdrop-blur-sm"
     role="presentation"
     on:click={() => {
       if (!isDeleting) {

@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -78,6 +79,7 @@ func main() {
 				Hidden:              true,
 				BackgroundColour:    application.NewRGB(242, 242, 247),
 				URL:                 "/settings",
+				UseApplicationMenu:  true,
 				Mac: application.MacWindow{
 					Backdrop:           application.MacBackdropNormal,
 					TitleBar:           application.MacTitleBarDefault,
@@ -103,12 +105,14 @@ func main() {
 			showSettingsWindow()
 		})
 	appMenu.AddSeparator()
-	appMenu.AddRole(application.ServicesMenu)
-	appMenu.AddSeparator()
-	appMenu.AddRole(application.Hide)
-	appMenu.AddRole(application.HideOthers)
-	appMenu.AddRole(application.UnHide)
-	appMenu.AddSeparator()
+	if runtime.GOOS == "darwin" {
+		appMenu.AddRole(application.ServicesMenu)
+		appMenu.AddSeparator()
+		appMenu.AddRole(application.Hide)
+		appMenu.AddRole(application.HideOthers)
+		appMenu.AddRole(application.UnHide)
+		appMenu.AddSeparator()
+	}
 	appMenu.AddRole(application.Quit)
 
 	fileMenu := menu.AddSubmenu("File")
@@ -125,10 +129,11 @@ func main() {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "main",
-		Title:  "LevelDB Editor",
-		Width:  1400,
-		Height: 900,
+		Name:               "main",
+		Title:              "LevelDB Editor",
+		Width:              1400,
+		Height:             900,
+		UseApplicationMenu: true,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,

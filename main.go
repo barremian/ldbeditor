@@ -33,6 +33,13 @@ func main() {
 	const settingsShortcut = "CmdOrCtrl+,"
 
 	var showSettingsWindow func()
+	var mainWindow application.Window
+	var settingsWindow application.Window
+	isWindows := runtime.GOOS == "windows"
+
+	greetService := &GreetService{}
+	levelDBService := &LevelDBService{}
+	windowService := &WindowService{}
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -43,8 +50,9 @@ func main() {
 		Name:        "LevelDB Editor",
 		Description: "View and edit LevelDB databases",
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
-			application.NewService(&LevelDBService{}),
+			application.NewService(greetService),
+			application.NewService(levelDBService),
+			application.NewService(windowService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -60,10 +68,25 @@ func main() {
 			},
 		},
 	})
+	windowService.SetApp(app)
+
+	applyWindowsMenuVisibilityPolicy := func(window application.Window) {
+		if !isWindows || window == nil {
+			return
+		}
+		window.HideMenuBar()
+	}
 
 	showSettingsWindow = func() {
-		settingsWindow, exists := app.Window.GetByName(settingsWindowName)
-		if !exists {
+		if settingsWindow == nil {
+			var exists bool
+			settingsWindow, exists = app.Window.GetByName(settingsWindowName)
+			if !exists {
+				settingsWindow = nil
+			}
+		}
+
+		if settingsWindow == nil {
 			settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 				Name:                settingsWindowName,
 				Title:               "Preferences",
@@ -86,6 +109,7 @@ func main() {
 					CollectionBehavior: application.MacWindowCollectionBehaviorFullScreenNone,
 				},
 			})
+			applyWindowsMenuVisibilityPolicy(settingsWindow)
 		}
 		if settingsWindow.IsMinimised() {
 			settingsWindow.UnMinimise()
@@ -128,7 +152,7 @@ func main() {
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:               "main",
 		Title:              "LevelDB Editor",
 		Width:              1400,
@@ -142,6 +166,7 @@ func main() {
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              "/",
 	})
+	applyWindowsMenuVisibilityPolicy(mainWindow)
 
 	// Create a goroutine that emits an event containing the current time every second.
 	// The frontend can listen to this event and update the UI accordingly.

@@ -3,6 +3,7 @@
   import { Dialogs, Window } from "@wailsio/runtime";
   import * as LevelDBService from "../../bindings/ldbeditor/leveldbservice";
   import { OpenDatabaseResult } from "../../bindings/ldbeditor/models";
+  import * as WindowService from "../../bindings/ldbeditor/windowservice";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
@@ -114,6 +115,8 @@
   let refreshCountdownInterval: ReturnType<typeof setInterval> | null = null;
   let refreshRequestId = 0;
   let valueRequestId = 0;
+  let isWindowsRuntime = false;
+  let pendingAltMenuToggle = false;
   let prettyPrintJson = false;
   let dbForcedReadOnly = false;
   let dbIntentionalReadOnly = false;
@@ -1340,6 +1343,10 @@
   }
 
   onMount(() => {
+    const platformHint =
+      `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+    isWindowsRuntime = platformHint.includes("win");
+
     const mediaQuery = window.matchMedia("(min-width: 768px)");
     const updateLayoutMode = () => {
       isDesktopLayout = mediaQuery.matches;
@@ -1366,6 +1373,24 @@
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) {
         return;
+      }
+
+      if (isWindowsRuntime) {
+        if (
+          event.key === "Alt" &&
+          !event.repeat &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey
+        ) {
+          pendingAltMenuToggle = true;
+          event.preventDefault();
+          return;
+        }
+
+        if (pendingAltMenuToggle && event.key !== "Alt" && event.altKey) {
+          pendingAltMenuToggle = false;
+        }
       }
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -1396,12 +1421,33 @@
       }
     };
 
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (!isWindowsRuntime || event.key !== "Alt") {
+        return;
+      }
+      const shouldToggleMenu = pendingAltMenuToggle;
+      pendingAltMenuToggle = false;
+      if (!shouldToggleMenu) {
+        return;
+      }
+      event.preventDefault();
+      void WindowService.ToggleCurrentWindowMenuBar();
+    };
+
+    const onWindowBlur = () => {
+      pendingAltMenuToggle = false;
+    };
+
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onWindowBlur);
 
     return () => {
       mediaQuery.removeEventListener("change", updateLayoutMode);
       window.removeEventListener("resize", onWindowResize);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onWindowBlur);
       stopPaneResize();
     };
   });

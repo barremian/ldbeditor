@@ -527,6 +527,7 @@
             padding: "0.5rem 0.5rem 0.5rem 0.75rem",
             fontSize: "0.875rem",
             lineHeight: "1.625",
+            caretColor: "hsl(var(--foreground) / 1)",
           },
           ".cm-gutterElement": {
             fontSize: "0.875rem",
@@ -754,6 +755,13 @@
           ".cm-tooltip.cm-tooltip-readonly-edit .cm-tooltip-arrow:after": {
             borderTopColor: "hsl(var(--popover) / 1)",
             borderBottomColor: "hsl(var(--popover) / 1)",
+          },
+          ".cm-cursor, .cm-dropCursor": {
+            borderLeftColor: "hsl(var(--foreground) / 1)",
+          },
+          ".cm-fat-cursor": {
+            backgroundColor: "hsl(var(--foreground) / 0.75)",
+            color: "hsl(var(--background) / 1)",
           },
         }),
       ],

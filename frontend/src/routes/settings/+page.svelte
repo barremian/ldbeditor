@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { ChevronDown } from "lucide-svelte";
   import { themePreference, type ThemePreference } from "$lib/theme";
+  import { Button } from "$lib/components/ui/button";
+  import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+    DropdownMenuItem,
+  } from "$lib/components/ui/dropdown-menu";
 
   type ToolbarItem = {
     id: "general" | "appearance" | "donation";
@@ -16,7 +24,14 @@
     { id: "donation", label: "Donation", visible: false, isActive: false },
   ];
 
+  const themeOptions: { value: ThemePreference; label: string }[] = [
+    { value: "system", label: "System" },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+  ];
+
   let preferredTheme: ThemePreference = "system";
+  $: themeLabel = themeOptions.find((o) => o.value === preferredTheme)?.label ?? "System";
   let unsubscribeThemePreference = () => {};
 
   onMount(() => {
@@ -54,16 +69,30 @@
 
   <section class="preferences-content">
     <div class="settings-row">
-      <label for="theme-select">Theme</label>
-      <select
-        id="theme-select"
-        bind:value={preferredTheme}
-        on:change={() => themePreference.set(preferredTheme)}
-      >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
+      <span class="settings-label">Theme</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild let:builder>
+          <Button
+            builders={[builder]}
+            variant="outline"
+            class="min-w-[180px] justify-between font-normal"
+          >
+            {themeLabel}
+            <ChevronDown class="ml-2 h-3.5 w-3.5 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="min-w-[180px]">
+          {#each themeOptions as option (option.value)}
+            <DropdownMenuItem
+              radio
+              checked={preferredTheme === option.value}
+              on:click={() => themePreference.set(option.value)}
+            >
+              {option.label}
+            </DropdownMenuItem>
+          {/each}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
   </section>
@@ -144,43 +173,10 @@
     min-height: 44px;
   }
 
-  .settings-row label {
+  .settings-label {
     color: hsl(var(--foreground));
     font-size: 14px;
     line-height: 1.35;
-  }
-
-  .settings-row select {
-    appearance: none;
-    background:
-      linear-gradient(45deg, transparent 50%, hsl(var(--muted-foreground)) 50%),
-      linear-gradient(135deg, hsl(var(--muted-foreground)) 50%, transparent 50%),
-      linear-gradient(to right, hsl(var(--card)), hsl(var(--card)));
-    background-position:
-      calc(100% - 14px) 50%,
-      calc(100% - 9px) 50%,
-      0 0;
-    background-repeat: no-repeat;
-    background-size:
-      5px 5px,
-      5px 5px,
-      100% 100%;
-    border: 1px solid hsl(var(--input));
-    border-radius: 8px;
-    color: hsl(var(--foreground));
-    font-size: 13px;
-    min-width: 180px;
-    padding: 7px 28px 7px 10px;
-    transition:
-      border-color 120ms ease,
-      box-shadow 120ms ease,
-      background-color 120ms ease;
-  }
-
-  .settings-row select:focus-visible {
-    border-color: hsl(var(--ring));
-    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.22);
-    outline: none;
   }
 
 </style>

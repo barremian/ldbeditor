@@ -1671,7 +1671,7 @@
     >
       {#if dbForcedReadOnly}
         <div
-          class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
+          class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground dark:border-warning/20 dark:bg-warning/5 dark:text-warning/80"
           role="status"
           aria-live="polite"
         >

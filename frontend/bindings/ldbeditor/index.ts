@@ -3,9 +3,11 @@
 
 import * as GreetService from "./greetservice.js";
 import * as LevelDBService from "./leveldbservice.js";
+import * as WindowService from "./windowservice.js";
 export {
     GreetService,
-    LevelDBService
+    LevelDBService,
+    WindowService
 };
 
 export {

@@ -120,26 +120,37 @@ func main() {
 
 	menu := app.Menu.New()
 
-	appMenu := menu.AddSubmenu("LevelDB Editor")
-	appMenu.AddRole(application.About)
-	appMenu.AddSeparator()
-	appMenu.Add("Settings...").
-		SetAccelerator(settingsShortcut).
-		OnClick(func(_ *application.Context) {
-			showSettingsWindow()
-		})
-	appMenu.AddSeparator()
-	if runtime.GOOS == "darwin" {
-		appMenu.AddRole(application.ServicesMenu)
+	if !isWindows {
+		appMenu := menu.AddSubmenu("LevelDB Editor")
+		appMenu.AddRole(application.About)
 		appMenu.AddSeparator()
-		appMenu.AddRole(application.Hide)
-		appMenu.AddRole(application.HideOthers)
-		appMenu.AddRole(application.UnHide)
-		appMenu.AddSeparator()
+		if runtime.GOOS == "darwin" {
+			appMenu.Add("Settings...").
+				SetAccelerator(settingsShortcut).
+				OnClick(func(_ *application.Context) {
+					showSettingsWindow()
+				})
+			appMenu.AddSeparator()
+			appMenu.AddRole(application.ServicesMenu)
+			appMenu.AddSeparator()
+			appMenu.AddRole(application.Hide)
+			appMenu.AddRole(application.HideOthers)
+			appMenu.AddRole(application.UnHide)
+			appMenu.AddSeparator()
+		}
+		appMenu.AddRole(application.Quit)
 	}
-	appMenu.AddRole(application.Quit)
 
 	fileMenu := menu.AddSubmenu("File")
+	if isWindows {
+		preferencesMenu := fileMenu.AddSubmenu("Preferences")
+		preferencesMenu.Add("Settings").
+			SetAccelerator(settingsShortcut).
+			OnClick(func(_ *application.Context) {
+				showSettingsWindow()
+			})
+		fileMenu.AddSeparator()
+	}
 	fileMenu.AddRole(application.CloseWindow)
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.ViewMenu)

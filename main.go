@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
@@ -108,6 +109,9 @@ func main() {
 					TitleBar:           application.MacTitleBarDefault,
 					CollectionBehavior: application.MacWindowCollectionBehaviorFullScreenNone,
 				},
+			})
+			settingsWindow.OnWindowEvent(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+				settingsWindow = nil
 			})
 			applyWindowsMenuVisibilityPolicy(settingsWindow)
 		}

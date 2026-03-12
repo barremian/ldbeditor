@@ -1,0 +1,1 @@
+Simplify the code. Critically analyze with an outlook of an expert senior programmer in your domain and actively simplify unnecessarily complicated codeblocks without changing the functionality and performance of the tool.

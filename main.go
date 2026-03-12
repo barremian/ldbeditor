@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
@@ -35,6 +36,9 @@ func main() {
 	var showSettingsWindow func()
 	var mainWindow application.Window
 	var settingsWindow application.Window
+	var settingsWindowReady bool
+	var settingsWindowShowPending bool
+	var unregisterSettingsRuntimeReady func()
 	isWindows := runtime.GOOS == "windows"
 
 	greetService := &GreetService{}
@@ -78,6 +82,17 @@ func main() {
 	}
 
 	showSettingsWindow = func() {
+		showAndFocusSettingsWindow := func() {
+			if settingsWindow == nil {
+				return
+			}
+			if settingsWindow.IsMinimised() {
+				settingsWindow.UnMinimise()
+			}
+			settingsWindow.Show()
+			settingsWindow.Focus()
+		}
+
 		if settingsWindow == nil {
 			var exists bool
 			settingsWindow, exists = app.Window.GetByName(settingsWindowName)
@@ -110,12 +125,33 @@ func main() {
 				},
 			})
 			applyWindowsMenuVisibilityPolicy(settingsWindow)
+
+			settingsWindowReady = false
+			settingsWindowShowPending = false
+			if unregisterSettingsRuntimeReady != nil {
+				unregisterSettingsRuntimeReady()
+				unregisterSettingsRuntimeReady = nil
+			}
+			unregisterSettingsRuntimeReady = settingsWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+				settingsWindowReady = true
+				if unregisterSettingsRuntimeReady != nil {
+					unregisterSettingsRuntimeReady()
+					unregisterSettingsRuntimeReady = nil
+				}
+				if settingsWindowShowPending {
+					settingsWindowShowPending = false
+					showAndFocusSettingsWindow()
+				}
+			})
 		}
-		if settingsWindow.IsMinimised() {
-			settingsWindow.UnMinimise()
+		if settingsWindowReady {
+			showAndFocusSettingsWindow()
+			return
 		}
-		settingsWindow.Show()
-		settingsWindow.Focus()
+
+		// Keep the window hidden until the first render completes
+		// to avoid flashing a blank white webview.
+		settingsWindowShowPending = true
 	}
 
 	menu := app.Menu.New()

@@ -38,7 +38,7 @@ func main() {
 	var settingsWindow application.Window
 	var settingsWindowReady bool
 	var settingsWindowShowPending bool
-	var unregisterSettingsRuntimeReady func()
+	var unregisterSettingsWindowLoaded func()
 	isWindows := runtime.GOOS == "windows"
 
 	greetService := &GreetService{}
@@ -128,15 +128,25 @@ func main() {
 
 			settingsWindowReady = false
 			settingsWindowShowPending = false
-			if unregisterSettingsRuntimeReady != nil {
-				unregisterSettingsRuntimeReady()
-				unregisterSettingsRuntimeReady = nil
+			if unregisterSettingsWindowLoaded != nil {
+				unregisterSettingsWindowLoaded()
+				unregisterSettingsWindowLoaded = nil
 			}
-			unregisterSettingsRuntimeReady = settingsWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+
+			var settingsReadyEvent events.WindowEventType
+			switch runtime.GOOS {
+			case "darwin":
+				settingsReadyEvent = events.Mac.WebViewDidFinishNavigation
+			case "windows":
+				settingsReadyEvent = events.Windows.WebViewNavigationCompleted
+			default:
+				settingsReadyEvent = events.Linux.WindowLoadFinished
+			}
+			unregisterSettingsWindowLoaded = settingsWindow.OnWindowEvent(settingsReadyEvent, func(_ *application.WindowEvent) {
 				settingsWindowReady = true
-				if unregisterSettingsRuntimeReady != nil {
-					unregisterSettingsRuntimeReady()
-					unregisterSettingsRuntimeReady = nil
+				if unregisterSettingsWindowLoaded != nil {
+					unregisterSettingsWindowLoaded()
+					unregisterSettingsWindowLoaded = nil
 				}
 				if settingsWindowShowPending {
 					settingsWindowShowPending = false

@@ -37,6 +37,15 @@ func main() {
 	var mainWindow application.Window
 	var settingsWindow application.Window
 	isWindows := runtime.GOOS == "windows"
+	keyBindings := map[string]func(window application.Window){}
+
+	if !isWindows {
+		keyBindings[settingsShortcut] = func(window application.Window) {
+			if showSettingsWindow != nil {
+				showSettingsWindow()
+			}
+		}
+	}
 
 	greetService := &GreetService{}
 	levelDBService := &LevelDBService{}
@@ -61,13 +70,7 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-		KeyBindings: map[string]func(window application.Window){
-			settingsShortcut: func(window application.Window) {
-				if showSettingsWindow != nil {
-					showSettingsWindow()
-				}
-			},
-		},
+		KeyBindings: keyBindings,
 	})
 	windowService.SetApp(app)
 
@@ -148,11 +151,9 @@ func main() {
 	fileMenu := menu.AddSubmenu("File")
 	if isWindows {
 		preferencesMenu := fileMenu.AddSubmenu("Preferences")
-		preferencesMenu.Add("Settings").
-			SetAccelerator(settingsShortcut).
-			OnClick(func(_ *application.Context) {
-				showSettingsWindow()
-			})
+		preferencesMenu.Add("Settings").OnClick(func(_ *application.Context) {
+			showSettingsWindow()
+		})
 		fileMenu.AddSeparator()
 	}
 	fileMenu.AddRole(application.CloseWindow)

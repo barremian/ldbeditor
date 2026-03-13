@@ -2328,7 +2328,7 @@
       <CardHeader class="space-y-2">
         <CardTitle id="delete-key-title">Delete key?</CardTitle>
         <CardDescription id="delete-key-description">
-          Delete "<span class="break-all">{keyPendingDelete}</span>"? This action
+          Delete <span class="break-all font-semibold">{keyPendingDelete}</span>? This action
           cannot be undone.
         </CardDescription>
       </CardHeader>

@@ -1790,8 +1790,12 @@
                       !!createValueValidationError}
                     on:click={createKey}
                   >
-                    <Save class="h-3.5 w-3.5" />
-                    {isCreating ? "Creating…" : "Create key"}
+                    {#if isCreating}
+                      <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
+                    {:else}
+                      <Save class="h-3.5 w-3.5" />
+                    {/if}
+                    Create key
                   </Button>
                   <Button
                     variant="ghost"
@@ -1980,8 +1984,12 @@
                     }}
                   >
                     <span class="inline-flex items-center gap-1.5">
-                      <Save class="h-3.5 w-3.5" />
-                      {isSaving ? "Saving…" : "Save"}
+                      {#if isSaving}
+                        <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
+                      {:else}
+                        <Save class="h-3.5 w-3.5" />
+                      {/if}
+                      Save
                     </span>
                     <DropdownMenuItem
                       slot="menu"
@@ -2349,8 +2357,12 @@
           disabled={isDeleting || effectiveReadOnly}
           on:click={confirmDeleteKey}
         >
-          <Trash2 class="mr-1.5 h-3.5 w-3.5" />
-          {isDeleting ? "Deleting…" : "Delete"}
+          {#if isDeleting}
+            <RefreshCcw class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          {:else}
+            <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+          {/if}
+          Delete
         </Button>
       </CardContent>
     </Card>

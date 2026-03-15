@@ -789,6 +789,20 @@
     void activateTab(nextTabIdValue);
   }
 
+  function reorderTab(tabId: string, targetIndex: number) {
+    const sourceIndex = tabs.findIndex((tab) => tab.id === tabId);
+    if (sourceIndex === -1) return;
+
+    const clampedTargetIndex = Math.max(0, Math.min(targetIndex, tabs.length - 1));
+    if (clampedTargetIndex === sourceIndex) return;
+
+    const nextTabs = [...tabs];
+    const [movedTab] = nextTabs.splice(sourceIndex, 1);
+    if (!movedTab) return;
+    nextTabs.splice(clampedTargetIndex, 0, movedTab);
+    tabs = nextTabs;
+  }
+
   function canCloseTab(tab: WorkspaceTab): boolean {
     return !(tabs.length === 1 && tab.type === "dashboard");
   }
@@ -1481,6 +1495,7 @@
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => closeTab(tabId)}
       onAddDashboardTab={addDashboardTab}
+      onReorderTab={reorderTab}
     />
     <header
       class="relative z-40 overflow-visible bg-background/60 px-4 pt-3 pb-2 backdrop-blur-sm"
@@ -2092,6 +2107,7 @@
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => closeTab(tabId)}
       onAddDashboardTab={addDashboardTab}
+      onReorderTab={reorderTab}
     />
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
       <Card class="w-full max-w-2xl">

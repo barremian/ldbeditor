@@ -14,7 +14,7 @@
 <ScrollAreaPrimitive.Scrollbar
   {orientation}
   class={cn(
-    "flex touch-none select-none transition-colors",
+    "group/scrollbar relative z-20 flex touch-none select-none transition-colors",
     orientation === "vertical" &&
       "h-full w-2.5 border-l border-l-transparent p-px",
     orientation === "horizontal" &&
@@ -25,7 +25,7 @@
   <slot />
   <ScrollAreaPrimitive.Thumb
     class={cn(
-      "bg-border relative rounded-full",
+      "relative rounded-full bg-border/80 transition-colors group-hover/scrollbar:bg-muted-foreground/55 group-active/scrollbar:bg-foreground/70",
       orientation === "vertical" && "flex-1"
     )}
   />

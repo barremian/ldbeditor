@@ -16,8 +16,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { ScrollArea } from "$lib/components/ui/scroll-area";
-  import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
+  import TabStrip from "$lib/components/tab-strip.svelte";
   import ValueCodeMirror from "$lib/components/value-codemirror.svelte";
   import {
     Check,
@@ -1475,70 +1474,14 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/60 pt-2 backdrop-blur-sm">
-      <ScrollArea orientation="horizontal" class="w-full">
-        <Tabs
-          value={activeTabId}
-          onValueChange={handleTabValueChange}
-          class="w-full"
-        >
-          <TabsList
-            class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none"
-          >
-            {#each tabs as tab, index (tab.id)}
-              <div
-                class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
-                  activeTabId === tab.id
-                    ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
-                    : `text-muted-foreground hover:bg-muted/40 ${
-                        (index < tabs.length - 1 &&
-                          activeTabId !== tabs[index + 1].id) ||
-                        index === tabs.length - 1
-                          ? "border-r-border/60"
-                          : ""
-                      }`
-                }`}
-              >
-                <TabsTrigger
-                  value={tab.id}
-                  class="min-w-0 max-w-[220px] flex-1 rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                  title={tab.type === "database" ? tab.path : tab.title}
-                >
-                  <span class="block truncate">
-                    {tab.type === "database" ? tab.title : "Dashboard"}
-                  </span>
-                </TabsTrigger>
-                {#if canCloseTab(tab)}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                    title={`Close ${tab.title}`}
-                    on:click={(event) => {
-                      event.stopPropagation();
-                      void closeTab(tab.id);
-                    }}
-                  >
-                    <X class="h-3.5 w-3.5" />
-                  </Button>
-                {/if}
-              </div>
-            {/each}
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              title="New dashboard tab"
-              on:click={() => {
-                void addDashboardTab();
-              }}
-            >
-              <Plus class="h-4 w-4" />
-            </Button>
-          </TabsList>
-        </Tabs>
-      </ScrollArea>
-    </div>
+    <TabStrip
+      {tabs}
+      {activeTabId}
+      {canCloseTab}
+      onTabChange={handleTabValueChange}
+      onCloseTab={(tabId) => closeTab(tabId)}
+      onAddDashboardTab={addDashboardTab}
+    />
     <header
       class="relative z-40 overflow-visible bg-background/60 px-4 pt-3 pb-2 backdrop-blur-sm"
     >
@@ -2142,70 +2085,14 @@
       role="none"
       on:dblclick={handleTitlebarDoubleClick}
     ></div>
-    <div class="bg-background/60 pt-2 backdrop-blur-sm">
-      <ScrollArea orientation="horizontal" class="w-full">
-        <Tabs
-          value={activeTabId}
-          onValueChange={handleTabValueChange}
-          class="w-full"
-        >
-          <TabsList
-            class="relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none"
-          >
-            {#each tabs as tab, index (tab.id)}
-              <div
-                class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
-                  activeTabId === tab.id
-                    ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
-                    : `text-muted-foreground hover:bg-muted/40 ${
-                        (index < tabs.length - 1 &&
-                          activeTabId !== tabs[index + 1].id) ||
-                        index === tabs.length - 1
-                          ? "border-r-border/60"
-                          : ""
-                      }`
-                }`}
-              >
-                <TabsTrigger
-                  value={tab.id}
-                  class="min-w-0 max-w-[220px] flex-1 rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                  title={tab.type === "database" ? tab.path : tab.title}
-                >
-                  <span class="block truncate">
-                    {tab.type === "database" ? tab.title : "Dashboard"}
-                  </span>
-                </TabsTrigger>
-                {#if canCloseTab(tab)}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                    title={`Close ${tab.title}`}
-                    on:click={(event) => {
-                      event.stopPropagation();
-                      void closeTab(tab.id);
-                    }}
-                  >
-                    <X class="h-3.5 w-3.5" />
-                  </Button>
-                {/if}
-              </div>
-            {/each}
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              title="New dashboard tab"
-              on:click={() => {
-                void addDashboardTab();
-              }}
-            >
-              <Plus class="h-4 w-4" />
-            </Button>
-          </TabsList>
-        </Tabs>
-      </ScrollArea>
-    </div>
+    <TabStrip
+      {tabs}
+      {activeTabId}
+      {canCloseTab}
+      onTabChange={handleTabValueChange}
+      onCloseTab={(tabId) => closeTab(tabId)}
+      onAddDashboardTab={addDashboardTab}
+    />
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
       <Card class="w-full max-w-2xl">
         <CardHeader class="space-y-4">

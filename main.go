@@ -32,12 +32,20 @@ func init() {
 func main() {
 	const settingsWindowName = "settings"
 	const settingsShortcut = "CmdOrCtrl+,"
+	const appName = "LevelDB Editor"
 
 	var showSettingsWindow func()
+	var persistMainWindowState func()
 	var mainWindow application.Window
 	var settingsWindow application.Window
 	isWindows := runtime.GOOS == "windows"
 	keyBindings := map[string]func(window application.Window){}
+	var stateStore *windowStateStore
+	windowState := persistedWindowState{
+		Version: 1,
+		Mode:    windowModeNormal,
+	}
+	lastNormalBounds := windowBounds{}
 
 	if !isWindows {
 		keyBindings[settingsShortcut] = func(window application.Window) {
@@ -51,13 +59,30 @@ func main() {
 	levelDBService := &LevelDBService{}
 	windowService := &WindowService{}
 
+	var err error
+	stateStore, err = newWindowStateStore(appName)
+	if err != nil {
+		log.Printf("window state persistence disabled: %v", err)
+		stateStore = nil
+	} else {
+		loadedState, loadErr := stateStore.Load()
+		if loadErr != nil {
+			log.Printf("failed to load window state; using defaults: %v", loadErr)
+		} else {
+			windowState = loadedState
+			if bounds, ok := loadedState.startupBounds(); ok {
+				lastNormalBounds = bounds
+			}
+		}
+	}
+
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
 	app := application.New(application.Options{
-		Name:        "LevelDB Editor",
+		Name:        appName,
 		Description: "View and edit LevelDB databases",
 		Services: []application.Service{
 			application.NewService(greetService),
@@ -71,6 +96,11 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 		KeyBindings: keyBindings,
+		OnShutdown: func() {
+			if persistMainWindowState != nil {
+				persistMainWindowState()
+			}
+		},
 	})
 	windowService.SetApp(app)
 
@@ -168,9 +198,9 @@ func main() {
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindowOptions := application.WebviewWindowOptions{
 		Name:               "main",
-		Title:              "LevelDB Editor",
+		Title:              appName,
 		Width:              1400,
 		Height:             900,
 		UseApplicationMenu: true,
@@ -181,8 +211,84 @@ func main() {
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              "/",
-	})
+	}
+	if bounds, ok := windowState.startupBounds(); ok {
+		mainWindowOptions.Width = bounds.Width
+		mainWindowOptions.Height = bounds.Height
+		mainWindowOptions.InitialPosition = application.WindowXY
+		mainWindowOptions.X = bounds.X
+		mainWindowOptions.Y = bounds.Y
+	}
+	switch windowState.modeOrDefault() {
+	case windowModeMaximised:
+		mainWindowOptions.StartState = application.WindowStateMaximised
+	case windowModeFullscreen:
+		mainWindowOptions.StartState = application.WindowStateFullscreen
+	}
+
+	mainWindow = app.Window.NewWithOptions(mainWindowOptions)
 	applyWindowsMenuVisibilityPolicy(mainWindow)
+	persistMainWindowState = func() {
+		if stateStore == nil || mainWindow == nil {
+			return
+		}
+
+		updatedState := windowState
+		switch {
+		case mainWindow.IsFullscreen():
+			updatedState.Mode = windowModeFullscreen
+		case mainWindow.IsMaximised():
+			updatedState.Mode = windowModeMaximised
+		default:
+			updatedState.Mode = windowModeNormal
+		}
+
+		currentBounds := windowBoundsFromRect(mainWindow.Bounds())
+		if updatedState.Mode == windowModeNormal {
+			if currentBounds.valid() {
+				updatedState.Bounds = currentBounds
+				updatedState.NormalBounds = currentBounds
+				lastNormalBounds = currentBounds
+			}
+		} else {
+			if currentBounds.valid() {
+				updatedState.Bounds = currentBounds
+			}
+			if lastNormalBounds.valid() {
+				updatedState.NormalBounds = lastNormalBounds
+			}
+		}
+
+		if err := stateStore.Save(updatedState); err != nil {
+			log.Printf("failed to save window state: %v", err)
+			return
+		}
+		windowState = updatedState
+	}
+
+	mainWindow.OnWindowEvent(events.Common.WindowDidMove, func(_ *application.WindowEvent) {
+		if mainWindow.IsMinimised() || mainWindow.IsMaximised() || mainWindow.IsFullscreen() {
+			return
+		}
+		bounds := windowBoundsFromRect(mainWindow.Bounds())
+		if bounds.valid() {
+			lastNormalBounds = bounds
+		}
+		persistMainWindowState()
+	})
+	mainWindow.OnWindowEvent(events.Common.WindowDidResize, func(_ *application.WindowEvent) {
+		if mainWindow.IsMinimised() || mainWindow.IsMaximised() || mainWindow.IsFullscreen() {
+			return
+		}
+		bounds := windowBoundsFromRect(mainWindow.Bounds())
+		if bounds.valid() {
+			lastNormalBounds = bounds
+		}
+		persistMainWindowState()
+	})
+	mainWindow.OnWindowEvent(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+		persistMainWindowState()
+	})
 
 	// Create a goroutine that emits an event containing the current time every second.
 	// The frontend can listen to this event and update the UI accordingly.
@@ -195,7 +301,7 @@ func main() {
 	}()
 
 	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
+	err = app.Run()
 
 	// If an error occurred while running the application, log it and exit.
 	if err != nil {

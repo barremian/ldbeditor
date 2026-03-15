@@ -15,8 +15,10 @@
   export let onTabChange: (tabId: string | undefined) => void = () => {};
   export let onCloseTab: (tabId: string) => void | Promise<void> = () => {};
   export let onAddDashboardTab: () => void | Promise<void> = () => {};
-  export let onReorderTab: (tabId: string, targetIndex: number) => void | Promise<void> =
-    () => {};
+  export let onReorderTab: (
+    tabId: string,
+    targetIndex: number
+  ) => void | Promise<void> = () => {};
 
   const SCROLL_STEP_PX = 240;
   const EDGE_TOLERANCE_PX = 2;
@@ -83,7 +85,10 @@
           midpoint: rect.left + rect.width / 2,
         };
       })
-      .filter((layout): layout is { index: number; midpoint: number } => layout !== null);
+      .filter(
+        (layout): layout is { index: number; midpoint: number } =>
+          layout !== null
+      );
   }
 
   function updateDropTarget() {
@@ -137,7 +142,11 @@
       insertionIndex <= draggedTabIndex ? insertionIndex : insertionIndex + 1;
   }
 
-  function handleTabPointerDown(event: PointerEvent, tabId: string, tabIndex: number) {
+  function handleTabPointerDown(
+    event: PointerEvent,
+    tabId: string,
+    tabIndex: number
+  ) {
     if (!event.isPrimary || event.button !== 0) return;
 
     const target = event.target as HTMLElement | null;
@@ -226,9 +235,13 @@
       canScrollRight = false;
       return;
     }
-    const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const maxScrollLeft = Math.max(
+      0,
+      viewport.scrollWidth - viewport.clientWidth
+    );
     hasHorizontalOverflow = maxScrollLeft > EDGE_TOLERANCE_PX;
-    canScrollLeft = hasHorizontalOverflow && viewport.scrollLeft > EDGE_TOLERANCE_PX;
+    canScrollLeft =
+      hasHorizontalOverflow && viewport.scrollLeft > EDGE_TOLERANCE_PX;
     canScrollRight =
       hasHorizontalOverflow &&
       viewport.scrollLeft < maxScrollLeft - EDGE_TOLERANCE_PX;
@@ -259,9 +272,9 @@
     viewportEl.scrollBy({ left: delta, behavior: "smooth" });
   }
 
-  $: viewportEl, bindViewport();
-  $: tabs, void tick().then(updateOverflowState);
-  $: activeTabId, void tick().then(updateOverflowState);
+  $: (viewportEl, bindViewport());
+  $: (tabs, void tick().then(updateOverflowState));
+  $: (activeTabId, void tick().then(updateOverflowState));
   $: if (draggedTabId && !tabs.some((tab) => tab.id === draggedTabId)) {
     resetDragState();
   }
@@ -279,7 +292,11 @@
     scrollbarXClasses="z-20 h-2.5 border-t border-border/60 bg-muted/20 hover:bg-muted/35 active:bg-muted/45"
     bind:viewportEl
   >
-    <Tabs value={activeTabId} onValueChange={handleTabsValueChangeWithDragGuard} class="w-full">
+    <Tabs
+      value={activeTabId}
+      onValueChange={handleTabsValueChangeWithDragGuard}
+      class="w-full"
+    >
       <TabsList
         class={`relative h-auto w-max min-w-full items-end border-b border-border !border-x-0 !border-t-0 bg-transparent p-0 rounded-none ${
           hasHorizontalOverflow ? "px-8" : ""
@@ -288,7 +305,9 @@
         {#each tabs as tab, index (tab.id)}
           {#if dropBoundarySlot === index}
             <div class="-mb-px h-7 w-0 shrink-0 pointer-events-none">
-              <span class="relative -left-px block h-full w-0.5 rounded-full bg-primary/70"></span>
+              <span
+                class="relative -left-px block h-full w-0.5 rounded-full bg-primary/70"
+              ></span>
             </div>
           {/if}
           <div
@@ -296,7 +315,8 @@
               activeTabId === tab.id
                 ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                 : `text-muted-foreground hover:bg-muted/40 ${
-                    (index < tabs.length - 1 && activeTabId !== tabs[index + 1].id) ||
+                    (index < tabs.length - 1 &&
+                      activeTabId !== tabs[index + 1].id) ||
                     index === tabs.length - 1
                       ? "border-r-border/60"
                       : ""
@@ -310,7 +330,8 @@
             } ${isDraggingTab ? "cursor-grabbing" : "cursor-grab"}`}
             use:registerTabElement={tab.id}
             aria-grabbed={isDraggingTab && draggedTabId === tab.id}
-            on:pointerdown={(event) => handleTabPointerDown(event, tab.id, index)}
+            on:pointerdown={(event) =>
+              handleTabPointerDown(event, tab.id, index)}
             on:pointermove={handleTabPointerMove}
             on:pointerup={handleTabPointerUp}
             on:pointercancel={handleTabPointerCancel}
@@ -343,14 +364,16 @@
         {/each}
         {#if dropBoundarySlot === tabs.length}
           <div class="-mb-px h-7 w-0 shrink-0 pointer-events-none">
-            <span class="relative -left-px block h-full w-0.5 rounded-full bg-primary/70"></span>
+            <span
+              class="relative -left-px block h-full w-0.5 rounded-full bg-primary/70"
+            ></span>
           </div>
         {/if}
         <Button
           variant="ghost"
           size="icon"
           class="h-7 w-7 rounded-t-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          title="New dashboard tab"
+          title="New tab"
           on:click={() => {
             void onAddDashboardTab();
           }}
@@ -362,7 +385,9 @@
   </ScrollArea>
 
   {#if hasHorizontalOverflow}
-    <div class="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-start justify-between px-1">
+    <div
+      class="pointer-events-none absolute inset-x-0 top-2 z-20 flex items-start justify-between px-1"
+    >
       <Button
         variant="ghost"
         size="icon"

@@ -67,6 +67,7 @@
   type WorkspaceTab =
     | { id: string; type: "dashboard"; title: string }
     | { id: string; type: "database"; title: string; path: string };
+  type PendingUnsavedClose = { tabId: string; closeWindowAfter: boolean };
   let nextTabId = 2;
   let tabs: WorkspaceTab[] = [
     { id: "tab-1", type: "dashboard", title: "Dashboard" },
@@ -91,6 +92,7 @@
   let editingKey: string | null = null;
   let renameInput = "";
   let keyPendingDelete: string | null = null;
+  let pendingUnsavedClose: PendingUnsavedClose | null = null;
   let isValueEditing = false;
   let valueLoading = false;
   let isDesktopLayout = false;
@@ -728,6 +730,7 @@
     resetCreateForm();
     resetRenameForm();
     keyPendingDelete = null;
+    pendingUnsavedClose = null;
     isValueEditing = false;
   }
 
@@ -811,15 +814,13 @@
     return !(tabs.length === 1 && tab.type === "dashboard");
   }
 
-  async function closeTab(tabId: string) {
+  async function executeCloseTab(tabId: string) {
     const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
     if (tabIndex === -1) return;
     const tab = tabs[tabIndex];
     if (!canCloseTab(tab)) return;
 
     const closingActiveTab = tabId === activeTabId;
-    if (closingActiveTab && isDirty && !(await confirmDiscardUnsavedChanges()))
-      return;
 
     if (tab.type === "database") {
       try {
@@ -850,20 +851,89 @@
     await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
   }
 
+  async function requestCloseTab(
+    tabId: string,
+    options: { closeWindowAfter?: boolean } = {}
+  ) {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (!canCloseTab(tab)) return;
+
+    const closeWindowAfter = Boolean(options.closeWindowAfter);
+    if (tabId === activeTabId && isDirty) {
+      pendingUnsavedClose = { tabId, closeWindowAfter };
+      return;
+    }
+
+    await executeCloseTab(tabId);
+    if (closeWindowAfter) {
+      await WindowService.CloseCurrentWindow();
+    }
+  }
+
+  function cancelPendingUnsavedClose() {
+    if (isSaving) return;
+    pendingUnsavedClose = null;
+  }
+
+  async function closePendingWithoutSaving() {
+    if (!pendingUnsavedClose || isSaving) return;
+    const { tabId, closeWindowAfter } = pendingUnsavedClose;
+    pendingUnsavedClose = null;
+    if (closeWindowAfter) {
+      await WindowService.CloseCurrentWindow();
+      return;
+    }
+    await executeCloseTab(tabId);
+  }
+
+  async function saveAndClosePending() {
+    if (!pendingUnsavedClose || isSaving) return;
+    const { tabId, closeWindowAfter } = pendingUnsavedClose;
+    if (tabId !== activeTabId) {
+      pendingUnsavedClose = null;
+      if (closeWindowAfter) {
+        await WindowService.CloseCurrentWindow();
+      } else {
+        await executeCloseTab(tabId);
+      }
+      return;
+    }
+
+    await saveValue({ closeEditorOnSuccess: true });
+    if (isDirty) return;
+
+    pendingUnsavedClose = null;
+    if (closeWindowAfter) {
+      await WindowService.CloseCurrentWindow();
+      return;
+    }
+    await executeCloseTab(tabId);
+  }
+
   async function closeActiveTabOrWindow() {
+    const activeTab = getActiveTab();
     if (tabs.length <= 1) {
+      if (
+        activeTab &&
+        activeTab.type === "database" &&
+        activeTab.id === activeTabId &&
+        isDirty
+      ) {
+        pendingUnsavedClose = { tabId: activeTab.id, closeWindowAfter: true };
+        return;
+      }
       await WindowService.CloseCurrentWindow();
       return;
     }
 
-    const activeTab = getActiveTab();
     if (!activeTab) {
       await WindowService.CloseCurrentWindow();
       return;
     }
 
     if (canCloseTab(activeTab)) {
-      await closeTab(activeTab.id);
+      await requestCloseTab(activeTab.id);
       return;
     }
 
@@ -1422,6 +1492,10 @@
           resetRenameForm();
           return;
         }
+        if (pendingUnsavedClose && !isSaving) {
+          pendingUnsavedClose = null;
+          return;
+        }
         if (keyPendingDelete && !isDeleting) {
           keyPendingDelete = null;
           return;
@@ -1524,7 +1598,7 @@
       {activeTabId}
       {canCloseTab}
       onTabChange={handleTabValueChange}
-      onCloseTab={(tabId) => closeTab(tabId)}
+      onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}
       onReorderTab={reorderTab}
     />
@@ -2136,7 +2210,7 @@
       {activeTabId}
       {canCloseTab}
       onTabChange={handleTabValueChange}
-      onCloseTab={(tabId) => closeTab(tabId)}
+      onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}
       onReorderTab={reorderTab}
     />
@@ -2297,6 +2371,62 @@
             <Trash2 class="mr-1.5 h-3.5 w-3.5" />
           {/if}
           Delete
+        </Button>
+      </CardContent>
+    </Card>
+  </div>
+{/if}
+
+{#if pendingUnsavedClose}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-background/55 p-4 backdrop-blur-sm"
+    role="presentation"
+    on:click={cancelPendingUnsavedClose}
+  >
+    <Card
+      class="w-full max-w-md border-border"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="close-unsaved-title"
+      aria-describedby="close-unsaved-description"
+      on:click={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <CardHeader class="space-y-2">
+        <CardTitle id="close-unsaved-title">Unsaved changes</CardTitle>
+        <CardDescription id="close-unsaved-description">
+          You have unsaved value edits. Save before closing this database tab?
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isSaving}
+          on:click={cancelPendingUnsavedClose}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={isSaving}
+          on:click={closePendingWithoutSaving}
+        >
+          Close without Saving
+        </Button>
+        <Button
+          size="sm"
+          disabled={isSaving || !canSaveValueChanges}
+          on:click={saveAndClosePending}
+        >
+          {#if isSaving}
+            <RefreshCcw class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          {:else}
+            <Save class="mr-1.5 h-3.5 w-3.5" />
+          {/if}
+          Save &amp; Close
         </Button>
       </CardContent>
     </Card>

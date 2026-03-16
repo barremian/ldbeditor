@@ -27,3 +27,16 @@ func (s *WindowService) ToggleCurrentWindowMenuBar() {
 	}
 	window.ToggleMenuBar()
 }
+
+// CloseCurrentWindow closes the currently active window.
+func (s *WindowService) CloseCurrentWindow() {
+	if s.app == nil {
+		return
+	}
+
+	window := s.app.Window.Current()
+	if window == nil {
+		return
+	}
+	window.Close()
+}

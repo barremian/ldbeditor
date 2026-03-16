@@ -14,6 +14,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as application$0 from "../github.com/wailsapp/wails/v3/pkg/application/models.js";
 
+/**
+ * CloseCurrentWindow closes the currently active window.
+ */
+export function CloseCurrentWindow(): $CancellablePromise<void> {
+    return $Call.ByID(1505879164);
+}
+
 export function SetApp(app: application$0.App | null): $CancellablePromise<void> {
     return $Call.ByID(1507137026, app);
 }

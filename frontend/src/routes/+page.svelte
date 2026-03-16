@@ -4,6 +4,9 @@
   import * as LevelDBService from "../../bindings/ldbeditor/leveldbservice";
   import { OpenDatabaseResult } from "../../bindings/ldbeditor/models";
   import * as WindowService from "../../bindings/ldbeditor/windowservice";
+  import { shortcutConfig } from "$lib/shortcuts/config";
+  import { ShortcutCommand } from "$lib/shortcuts/commands";
+  import { createShortcutManager } from "$lib/shortcuts/manager";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
@@ -54,6 +57,7 @@
   const REFRESH_RING_CIRCUMFERENCE = 2 * Math.PI * REFRESH_RING_RADIUS;
   const REFRESH_COUNTDOWN_TICK_MS = 200;
   const MIN_REFRESH_FEEDBACK_MS = 150;
+  const shortcutManager = createShortcutManager(shortcutConfig);
 
   // Startup view state
   let recentPaths: { path: string; label: string }[] = [];
@@ -846,6 +850,26 @@
     await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
   }
 
+  async function closeActiveTabOrWindow() {
+    if (tabs.length <= 1) {
+      await WindowService.CloseCurrentWindow();
+      return;
+    }
+
+    const activeTab = getActiveTab();
+    if (!activeTab) {
+      await WindowService.CloseCurrentWindow();
+      return;
+    }
+
+    if (canCloseTab(activeTab)) {
+      await closeTab(activeTab.id);
+      return;
+    }
+
+    await WindowService.CloseCurrentWindow();
+  }
+
   async function openDatabaseFromPath(path: string, readOnly = false) {
     if (!path || path.trim() === "" || isOpeningDatabase) return;
 
@@ -1383,6 +1407,35 @@
     mediaQuery.addEventListener("change", updateLayoutMode);
     window.addEventListener("resize", onWindowResize);
 
+    const unregisterShortcutHandlers = [
+      shortcutManager.registerHandler(ShortcutCommand.CloseActiveTabOrWindow, () =>
+        closeActiveTabOrWindow()
+      ),
+      shortcutManager.registerHandler(ShortcutCommand.SaveValue, () => {
+        if (!canSaveValueChanges) {
+          return;
+        }
+        return saveValueOnly();
+      }),
+      shortcutManager.registerHandler(ShortcutCommand.Escape, () => {
+        if (editingKey) {
+          resetRenameForm();
+          return;
+        }
+        if (keyPendingDelete && !isDeleting) {
+          keyPendingDelete = null;
+          return;
+        }
+        if (isValueEditing) {
+          revertValueChanges();
+          return;
+        }
+        if (showCreateForm) {
+          resetCreateForm();
+        }
+      }),
+    ];
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) {
         return;
@@ -1406,31 +1459,8 @@
         }
       }
 
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        if (canSaveValueChanges) {
-          event.preventDefault();
-          void saveValueOnly();
-        }
-        return;
-      }
-
-      if (event.key === "Escape") {
-        if (editingKey) {
-          resetRenameForm();
-          return;
-        }
-        if (keyPendingDelete && !isDeleting) {
-          keyPendingDelete = null;
-          return;
-        }
-        if (isValueEditing) {
-          revertValueChanges();
-          return;
-        }
-        if (showCreateForm) {
-          resetCreateForm();
-          return;
-        }
+      if (shortcutManager.handleKeyDown(event)) {
+        event.preventDefault();
       }
     };
 
@@ -1461,6 +1491,7 @@
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onWindowBlur);
+      unregisterShortcutHandlers.forEach((unregister) => unregister());
       stopPaneResize();
     };
   });

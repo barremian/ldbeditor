@@ -2,6 +2,10 @@
   import { onDestroy, onMount } from "svelte";
   import { ChevronDown, HandHeart, Palette, Settings2 } from "lucide-svelte";
   import { themePreference, type ThemePreference } from "$lib/theme";
+  import {
+    confirmCloseLastTabPreference,
+    initializeConfirmCloseLastTabPreference,
+  } from "$lib/preferences";
   import { Button } from "$lib/components/ui/button";
   import {
     DropdownMenu,
@@ -19,12 +23,12 @@
 
   // Keep General and Donation entries in-place for easy reactivation later.
   const navItems: NavItem[] = [
-    { id: "general", label: "General", visible: false, icon: Settings2 },
+    { id: "general", label: "General", visible: true, icon: Settings2 },
     { id: "appearance", label: "Appearance", visible: true, icon: Palette },
     { id: "donation", label: "Donation", visible: false, icon: HandHeart },
   ];
 
-  let activeSettingId: NavItem["id"] = "appearance";
+  let activeSettingId: NavItem["id"] = "general";
 
   const themeOptions: { value: ThemePreference; label: string }[] = [
     { value: "system", label: "System" },
@@ -35,15 +39,22 @@
   let preferredTheme: ThemePreference = "system";
   $: themeLabel = themeOptions.find((o) => o.value === preferredTheme)?.label ?? "System";
   let unsubscribeThemePreference = () => {};
+  let confirmCloseLastTab = true;
+  let unsubscribeConfirmCloseLastTab = () => {};
 
   onMount(() => {
+    initializeConfirmCloseLastTabPreference();
     unsubscribeThemePreference = themePreference.subscribe((value) => {
       preferredTheme = value;
+    });
+    unsubscribeConfirmCloseLastTab = confirmCloseLastTabPreference.subscribe((value) => {
+      confirmCloseLastTab = value;
     });
   });
 
   onDestroy(() => {
     unsubscribeThemePreference();
+    unsubscribeConfirmCloseLastTab();
   });
 </script>
 
@@ -79,6 +90,44 @@
 
   <!-- Right content area -->
   <div class="flex-1 overflow-y-auto p-6">
+    {#if activeSettingId === "general"}
+      <h2 class="mb-4 text-lg font-semibold text-foreground">General</h2>
+
+      <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Window
+      </p>
+      <div class="rounded-lg border border-border/70 p-3">
+        <div class="divide-y divide-border/70">
+          <div class="flex min-h-[44px] items-center justify-between gap-4 px-1 py-2">
+            <span class="text-sm text-foreground">Confirm when closing last tab</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={confirmCloseLastTab}
+              class="shrink-0 rounded-md outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              on:click={() =>
+                confirmCloseLastTabPreference.set(!confirmCloseLastTab)}
+            >
+              <span
+                class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+                  confirmCloseLastTab
+                    ? "border-primary/40 bg-primary"
+                    : "border-border bg-muted"
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  class={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform ${
+                    confirmCloseLastTab ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                ></span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
     {#if activeSettingId === "appearance"}
       <h2 class="mb-4 text-lg font-semibold text-foreground">Appearance</h2>
 

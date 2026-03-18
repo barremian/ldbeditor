@@ -7,6 +7,10 @@
   import { shortcutConfig } from "$lib/shortcuts/config";
   import { ShortcutCommand } from "$lib/shortcuts/commands";
   import { createShortcutManager } from "$lib/shortcuts/manager";
+  import {
+    confirmCloseLastTabPreference,
+    initializeConfirmCloseLastTabPreference,
+  } from "$lib/preferences";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
@@ -93,6 +97,7 @@
   let renameInput = "";
   let keyPendingDelete: string | null = null;
   let pendingUnsavedClose: PendingUnsavedClose | null = null;
+  let pendingCloseLastTab = false;
   let isValueEditing = false;
   let valueLoading = false;
   let isDesktopLayout = false;
@@ -923,6 +928,10 @@
         pendingUnsavedClose = { tabId: activeTab.id, closeWindowAfter: true };
         return;
       }
+      if (confirmCloseLastTabPreference.get()) {
+        pendingCloseLastTab = true;
+        return;
+      }
       await WindowService.CloseCurrentWindow();
       return;
     }
@@ -937,6 +946,21 @@
       return;
     }
 
+    await WindowService.CloseCurrentWindow();
+  }
+
+  function cancelPendingCloseLastTab() {
+    pendingCloseLastTab = false;
+  }
+
+  async function closeWindowAfterLastTabConfirm() {
+    pendingCloseLastTab = false;
+    await WindowService.CloseCurrentWindow();
+  }
+
+  async function closeWindowAndDisableLastTabConfirm() {
+    confirmCloseLastTabPreference.set(false);
+    pendingCloseLastTab = false;
     await WindowService.CloseCurrentWindow();
   }
 
@@ -1450,6 +1474,8 @@
   }
 
   onMount(() => {
+    initializeConfirmCloseLastTabPreference();
+
     const platformHint =
       `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
     isWindowsRuntime = platformHint.includes("win");
@@ -1494,6 +1520,10 @@
         }
         if (pendingUnsavedClose && !isSaving) {
           pendingUnsavedClose = null;
+          return;
+        }
+        if (pendingCloseLastTab) {
+          pendingCloseLastTab = false;
           return;
         }
         if (keyPendingDelete && !isDeleting) {
@@ -2428,6 +2458,57 @@
           {/if}
           Save &amp; Close
         </Button>
+      </CardContent>
+    </Card>
+  </div>
+{/if}
+
+{#if pendingCloseLastTab}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-background/55 p-4 backdrop-blur-sm"
+    role="presentation"
+    on:click={cancelPendingCloseLastTab}
+  >
+    <Card
+      class="w-full max-w-md border-border"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="close-last-tab-title"
+      aria-describedby="close-last-tab-description"
+      on:click={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <CardHeader class="space-y-2">
+        <CardTitle id="close-last-tab-title">Close window</CardTitle>
+        <CardDescription id="close-last-tab-description">
+          Are you sure you want to close this window?
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="flex justify-end gap-2">
+        <Button variant="outline" size="sm" on:click={cancelPendingCloseLastTab}>
+          Cancel
+        </Button>
+        <SplitButton
+          size="sm"
+          triggerLabel="Close options"
+          primaryClass="pr-2"
+          triggerClass="w-8 px-0"
+          triggerIconClass="h-3.5 w-3.5"
+          on:primary={() => {
+            void closeWindowAfterLastTabConfirm();
+          }}
+        >
+          Close
+          <DropdownMenuItem
+            slot="menu"
+            on:click={() => {
+              void closeWindowAndDisableLastTabConfirm();
+            }}
+          >
+            Close and don&apos;t ask again
+          </DropdownMenuItem>
+        </SplitButton>
       </CardContent>
     </Card>
   </div>

@@ -9,7 +9,9 @@
   import { createShortcutManager } from "$lib/shortcuts/manager";
   import {
     confirmCloseLastTabPreference,
-    initializeConfirmCloseLastTabPreference,
+    keyPaneWidthPreference,
+    recentPathsPreference,
+    valueFormatPreference,
   } from "$lib/preferences";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
@@ -41,10 +43,6 @@
     X,
   } from "lucide-svelte";
 
-  const RECENT_STORAGE_KEY = "recent-leveldb-paths";
-  const MAX_RECENT = 10;
-  const KEY_PANE_WIDTH_STORAGE_KEY = "editor-key-pane-width";
-  const VALUE_FORMAT_PREFS_STORAGE_KEY = "value-format-preferences";
   const KEY_SEARCH_DEBOUNCE_MS = 300;
   const DEFAULT_KEY_PANE_WIDTH = 320;
   const MIN_KEY_PANE_WIDTH = 300;
@@ -64,7 +62,6 @@
   const shortcutManager = createShortcutManager(shortcutConfig);
 
   // Startup view state
-  let recentPaths: { path: string; label: string }[] = [];
   let isOpeningDatabase = false;
   let isLoadingKeys = false;
   let errorMessage = "";
@@ -102,7 +99,6 @@
   let valueLoading = false;
   let isDesktopLayout = false;
   let keyPaneWidth = DEFAULT_KEY_PANE_WIDTH;
-  let hasLoadedPaneWidth = false;
   let isResizingPane = false;
   let editorSplitContainer: HTMLDivElement | null = null;
   let detachPointerListeners: (() => void) | null = null;
@@ -127,7 +123,6 @@
   let valueRequestId = 0;
   let isWindowsRuntime = false;
   let pendingAltMenuToggle = false;
-  let prettyPrintJson = false;
   let dbForcedReadOnly = false;
   let dbIntentionalReadOnly = false;
   let dbReadOnlyReason = "";
@@ -142,8 +137,9 @@
     }
   > = {};
   let effectiveReadOnly = false;
-  let valueFormatPrefsByDatabase: Record<string, { prettyPrintJson: boolean }> =
-    {};
+  $: prettyPrintJson = dbPath
+    ? Boolean($valueFormatPreference[dbPath]?.prettyPrintJson)
+    : false;
 
   type TabViewState = {
     keys: string[];
@@ -304,49 +300,6 @@
     editorValue = formatValueForDisplay(editorValueRaw);
   }
 
-  function loadValueFormatPrefs() {
-    try {
-      const stored = localStorage.getItem(VALUE_FORMAT_PREFS_STORAGE_KEY);
-      if (!stored) {
-        valueFormatPrefsByDatabase = {};
-        return;
-      }
-      const parsed = JSON.parse(stored) as Record<
-        string,
-        { prettyPrintJson?: unknown }
-      >;
-      valueFormatPrefsByDatabase = Object.entries(parsed ?? {}).reduce(
-        (acc, [path, preference]) => {
-          if (!path || typeof preference !== "object" || preference === null) {
-            return acc;
-          }
-          acc[path] = {
-            prettyPrintJson: Boolean(preference.prettyPrintJson),
-          };
-          return acc;
-        },
-        {} as Record<string, { prettyPrintJson: boolean }>
-      );
-    } catch {
-      valueFormatPrefsByDatabase = {};
-    }
-  }
-
-  function saveValueFormatPrefs() {
-    try {
-      localStorage.setItem(
-        VALUE_FORMAT_PREFS_STORAGE_KEY,
-        JSON.stringify(valueFormatPrefsByDatabase)
-      );
-    } catch {
-      // ignore localStorage failures
-    }
-  }
-
-  function getPrettyPrintEnabled(path: string): boolean {
-    return Boolean(valueFormatPrefsByDatabase[path]?.prettyPrintJson);
-  }
-
   function getForcedReadOnlyState(path: string): {
     readOnlyReason: string;
     lockedByApp: string;
@@ -355,18 +308,6 @@
     const state = forcedReadOnlyByDatabase[path];
     if (!state) return null;
     return state;
-  }
-
-  function setPrettyPrintEnabled(path: string, enabled: boolean) {
-    if (!path) return;
-    const existing = valueFormatPrefsByDatabase[path];
-    valueFormatPrefsByDatabase = {
-      ...valueFormatPrefsByDatabase,
-      [path]: {
-        prettyPrintJson: enabled,
-      },
-    };
-    saveValueFormatPrefs();
   }
 
   function setForcedReadOnlyState(
@@ -395,8 +336,8 @@
 
   function togglePrettyPrintJson() {
     if (!dbPath) return;
-    prettyPrintJson = !prettyPrintJson;
-    setPrettyPrintEnabled(dbPath, prettyPrintJson);
+    const next = !valueFormatPreference.isPrettyPrintEnabled(dbPath);
+    valueFormatPreference.setPrettyPrintForPath(dbPath, next);
     syncEditorDisplayWithRawValue();
   }
 
@@ -542,35 +483,8 @@
     return Math.min(Math.max(width, MIN_KEY_PANE_WIDTH), maxKeyWidth);
   }
 
-  function loadPaneWidthPreference() {
-    try {
-      const rawWidth = localStorage.getItem(KEY_PANE_WIDTH_STORAGE_KEY);
-      if (!rawWidth) {
-        keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
-        return;
-      }
-
-      const parsedWidth = Number(rawWidth);
-      if (!Number.isFinite(parsedWidth)) {
-        keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
-        return;
-      }
-
-      keyPaneWidth = clampKeyPaneWidth(parsedWidth);
-    } catch {
-      keyPaneWidth = clampKeyPaneWidth(DEFAULT_KEY_PANE_WIDTH);
-    }
-  }
-
-  function savePaneWidthPreference() {
-    try {
-      localStorage.setItem(
-        KEY_PANE_WIDTH_STORAGE_KEY,
-        String(Math.round(keyPaneWidth))
-      );
-    } catch {
-      // ignore localStorage failures
-    }
+  $: if (!isResizingPane && isDesktopLayout) {
+    keyPaneWidth = clampKeyPaneWidth($keyPaneWidthPreference);
   }
 
   function syncKeyPaneWidthToViewport() {
@@ -585,7 +499,7 @@
     }
     isResizingPane = false;
     document.body.style.cursor = "";
-    savePaneWidthPreference();
+    keyPaneWidthPreference.set(Math.round(clampKeyPaneWidth(keyPaneWidth)));
   }
 
   function startPaneResize(event: PointerEvent) {
@@ -623,39 +537,6 @@
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
     };
-  }
-
-  // Load recent paths from localStorage
-  function loadRecentPaths() {
-    try {
-      const stored = localStorage.getItem(RECENT_STORAGE_KEY);
-      if (stored) {
-        recentPaths = JSON.parse(stored);
-      } else {
-        recentPaths = [];
-      }
-    } catch {
-      recentPaths = [];
-    }
-  }
-
-  // Save recent paths to localStorage
-  function saveRecentPaths(paths: { path: string; label: string }[]) {
-    recentPaths = paths.slice(0, MAX_RECENT);
-    localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentPaths));
-  }
-
-  // Add path to recent list
-  function addToRecent(path: string) {
-    const label = path.split(/[/\\]/).pop() || path;
-    let paths = recentPaths.filter((p) => p.path !== path);
-    paths.unshift({ path, label });
-    saveRecentPaths(paths);
-  }
-
-  function removeFromRecent(path: string) {
-    const paths = recentPaths.filter((p) => p.path !== path);
-    saveRecentPaths(paths);
   }
 
   function getTabLabel(path: string) {
@@ -764,7 +645,6 @@
     }
 
     dbPath = nextTab.path;
-    prettyPrintJson = getPrettyPrintEnabled(dbPath);
     const forcedState = getForcedReadOnlyState(dbPath);
     dbForcedReadOnly = Boolean(forcedState);
     dbIntentionalReadOnly = Boolean(forcedState?.intentionalReadOnly);
@@ -985,7 +865,7 @@
           result.lockedByApp || "",
           Boolean(result.intentionalReadOnly)
         );
-        addToRecent(canonicalPath);
+        recentPathsPreference.add(canonicalPath);
         const activeTab = getActiveTab();
         const activeDashboardTabId =
           activeTab && activeTab.type === "dashboard" ? activeTab.id : null;
@@ -1474,8 +1354,6 @@
   }
 
   onMount(() => {
-    initializeConfirmCloseLastTabPreference();
-
     const platformHint =
       `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
     isWindowsRuntime = platformHint.includes("win");
@@ -1484,13 +1362,6 @@
     const updateLayoutMode = () => {
       isDesktopLayout = mediaQuery.matches;
       if (!isDesktopLayout) return;
-
-      if (!hasLoadedPaneWidth) {
-        loadPaneWidthPreference();
-        hasLoadedPaneWidth = true;
-        return;
-      }
-
       syncKeyPaneWidthToViewport();
     };
 
@@ -1611,9 +1482,6 @@
     }
   });
 
-  // Init
-  loadRecentPaths();
-  loadValueFormatPrefs();
 </script>
 
 {#if dbPath}
@@ -2287,7 +2155,7 @@
             <p class="text-sm text-destructive">{errorMessage}</p>
           {/if}
 
-          {#if recentPaths.length > 0}
+          {#if $recentPathsPreference.length > 0}
             <section class="space-y-3">
               <h2
                 class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
@@ -2296,7 +2164,7 @@
                 Recently opened
               </h2>
               <div class="space-y-2">
-                {#each recentPaths as item}
+                {#each $recentPathsPreference as item}
                   <div class="group flex items-center gap-1">
                     <Button
                       variant="ghost"
@@ -2334,7 +2202,7 @@
                       aria-label={`Remove ${item.label} from recently opened`}
                       title="Remove from recently opened"
                       on:click={() => {
-                        removeFromRecent(item.path);
+                        recentPathsPreference.remove(item.path);
                       }}
                       disabled={isOpeningDatabase}
                     >

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { ChevronDown, HandHeart, Palette, Settings2 } from "lucide-svelte";
-  import { themePreference, type ThemePreference } from "$lib/theme";
   import {
+    themePreference,
+    type ThemePreference,
     confirmCloseLastTabPreference,
-    initializeConfirmCloseLastTabPreference,
   } from "$lib/preferences";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -43,7 +43,6 @@
   let unsubscribeConfirmCloseLastTab = () => {};
 
   onMount(() => {
-    initializeConfirmCloseLastTabPreference();
     unsubscribeThemePreference = themePreference.subscribe((value) => {
       preferredTheme = value;
     });

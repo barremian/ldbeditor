@@ -5,6 +5,9 @@
     themePreference,
     type ThemePreference,
     confirmCloseLastTabPreference,
+    editorFontSizePreference,
+    EDITOR_FONT_SIZE_OPTIONS,
+    type EditorFontSizeValue,
   } from "$lib/preferences";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -42,6 +45,11 @@
   let confirmCloseLastTab = true;
   let unsubscribeConfirmCloseLastTab = () => {};
 
+  let editorFontSize: EditorFontSizeValue = 14;
+  $: editorFontSizeLabel =
+    EDITOR_FONT_SIZE_OPTIONS.find((o) => o.value === editorFontSize)?.label ?? "14 px (Default)";
+  let unsubscribeEditorFontSize = () => {};
+
   onMount(() => {
     unsubscribeThemePreference = themePreference.subscribe((value) => {
       preferredTheme = value;
@@ -49,11 +57,15 @@
     unsubscribeConfirmCloseLastTab = confirmCloseLastTabPreference.subscribe((value) => {
       confirmCloseLastTab = value;
     });
+    unsubscribeEditorFontSize = editorFontSizePreference.subscribe((value) => {
+      editorFontSize = value;
+    });
   });
 
   onDestroy(() => {
     unsubscribeThemePreference();
     unsubscribeConfirmCloseLastTab();
+    unsubscribeEditorFontSize();
   });
 </script>
 
@@ -154,6 +166,32 @@
                     radio
                     checked={preferredTheme === option.value}
                     on:click={() => themePreference.set(option.value)}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                {/each}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div class="flex min-h-[44px] items-center justify-between gap-4 px-1 py-2">
+            <span class="text-sm text-foreground">Editor font size</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild let:builder>
+                <Button
+                  builders={[builder]}
+                  variant="outline"
+                  class="min-w-[180px] justify-between font-normal"
+                >
+                  {editorFontSizeLabel}
+                  <ChevronDown class="ml-2 h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="min-w-[180px]">
+                {#each EDITOR_FONT_SIZE_OPTIONS as option (option.value)}
+                  <DropdownMenuItem
+                    radio
+                    checked={editorFontSize === option.value}
+                    on:click={() => editorFontSizePreference.set(option.value)}
                   >
                     {option.label}
                   </DropdownMenuItem>

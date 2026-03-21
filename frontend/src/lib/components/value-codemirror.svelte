@@ -525,12 +525,12 @@
           },
           ".cm-content": {
             padding: "0.5rem 0.5rem 0.5rem 0.75rem",
-            fontSize: "0.875rem",
+            fontSize: "var(--editor-font-size, 0.875rem)",
             lineHeight: "1.625",
             caretColor: "hsl(var(--foreground) / 1)",
           },
           ".cm-gutterElement": {
-            fontSize: "0.875rem",
+            fontSize: "var(--editor-font-size, 0.875rem)",
             lineHeight: "1.625",
           },
           ".cm-gutters": {

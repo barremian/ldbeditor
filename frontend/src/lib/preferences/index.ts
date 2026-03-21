@@ -23,12 +23,21 @@ export {
   type RecentPathItem,
   MAX_RECENT_PATHS,
 } from "./recent-paths";
+export {
+  editorFontSizePreference,
+  initializeEditorFontSizePreference,
+  EDITOR_FONT_SIZE_OPTIONS,
+  EDITOR_FONT_SIZE_STORAGE_KEY,
+  EDITOR_FONT_SIZE_VALUES,
+  type EditorFontSizeValue,
+} from "./editor-font-size";
 
 import { initializeTheme } from "./theme";
 import { initializeConfirmCloseLastTabPreference } from "./confirm-close-tab";
 import { initializeValueFormatPreference } from "./value-format";
 import { initializeKeyPaneWidthPreference } from "./pane-width";
 import { initializeRecentPathsPreference } from "./recent-paths";
+import { initializeEditorFontSizePreference } from "./editor-font-size";
 
 export function initializeAllPreferences(): void {
   initializeTheme();
@@ -36,4 +45,5 @@ export function initializeAllPreferences(): void {
   initializeValueFormatPreference();
   initializeKeyPaneWidthPreference();
   initializeRecentPathsPreference();
+  initializeEditorFontSizePreference();
 }

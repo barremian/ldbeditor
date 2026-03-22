@@ -24,6 +24,8 @@ func init() {
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[string]("time")
+	application.RegisterEvent[string]("app:closeActiveTabOrWindow")
+	application.RegisterEvent[string]("app:saveValue")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -186,10 +188,25 @@ func main() {
 		})
 		fileMenu.AddSeparator()
 	}
-	fileMenu.AddRole(application.CloseWindow)
+	fileMenu.Add("Save").
+		SetAccelerator("CmdOrCtrl+s").
+		OnClick(func(_ *application.Context) {
+			app.Event.Emit("app:saveValue", "")
+		})
+	fileMenu.Add("Close").
+		SetAccelerator("CmdOrCtrl+w").
+		OnClick(func(_ *application.Context) {
+			app.Event.Emit("app:closeActiveTabOrWindow", "")
+		})
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.ViewMenu)
-	menu.AddRole(application.WindowMenu)
+	windowMenu := menu.AddSubmenu("Window")
+	windowMenu.AddRole(application.Minimise)
+	windowMenu.AddRole(application.Zoom)
+	if runtime.GOOS == "darwin" {
+		windowMenu.AddSeparator()
+		windowMenu.AddRole(application.Front)
+	}
 	menu.AddRole(application.HelpMenu)
 	app.Menu.Set(menu)
 

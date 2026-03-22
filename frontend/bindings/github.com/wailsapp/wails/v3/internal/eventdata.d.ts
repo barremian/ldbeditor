@@ -8,6 +8,8 @@ import type { Events } from "@wailsio/runtime";
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "app:closeActiveTabOrWindow": string;
+            "app:saveValue": string;
             "time": string;
         }
     }

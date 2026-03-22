@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
-  import { Dialogs, Window } from "@wailsio/runtime";
+  import { Dialogs, Events, Window } from "@wailsio/runtime";
   import * as LevelDBService from "../../bindings/ldbeditor/leveldbservice";
   import { OpenDatabaseResult } from "../../bindings/ldbeditor/models";
   import * as WindowService from "../../bindings/ldbeditor/windowservice";
@@ -1374,16 +1374,20 @@
     mediaQuery.addEventListener("change", updateLayoutMode);
     window.addEventListener("resize", onWindowResize);
 
+    const unregisterCloseFromMenu = Events.On(
+      "app:closeActiveTabOrWindow",
+      () => {
+        void closeActiveTabOrWindow();
+      }
+    );
+    const unregisterSaveFromMenu = Events.On("app:saveValue", () => {
+      if (!canSaveValueChanges) {
+        return;
+      }
+      void saveValueOnly();
+    });
+
     const unregisterShortcutHandlers = [
-      shortcutManager.registerHandler(ShortcutCommand.CloseActiveTabOrWindow, () =>
-        closeActiveTabOrWindow()
-      ),
-      shortcutManager.registerHandler(ShortcutCommand.SaveValue, () => {
-        if (!canSaveValueChanges) {
-          return;
-        }
-        return saveValueOnly();
-      }),
       shortcutManager.registerHandler(ShortcutCommand.Escape, () => {
         if (editingKey) {
           resetRenameForm();
@@ -1466,6 +1470,8 @@
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onWindowBlur);
+      unregisterCloseFromMenu();
+      unregisterSaveFromMenu();
       unregisterShortcutHandlers.forEach((unregister) => unregister());
       stopPaneResize();
     };

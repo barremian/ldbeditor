@@ -22,6 +22,15 @@ export function CloseDatabase(path: string): $CancellablePromise<void> {
 }
 
 /**
+ * CreateDatabase creates and opens a new writable LevelDB database at the given path.
+ */
+export function CreateDatabase(path: string): $CancellablePromise<$models.OpenDatabaseResult> {
+    return $Call.ByID(814442680, path).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+/**
  * DeleteKey deletes the given key.
  * keyDisplay uses the same format as returned by GetKeys.
  */
@@ -36,7 +45,7 @@ export function DeleteKey(path: string, keyDisplay: string): $CancellablePromise
  */
 export function GetKeys(path: string): $CancellablePromise<string[]> {
     return $Call.ByID(3118125663, path).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
@@ -56,7 +65,7 @@ export function GetValue(path: string, keyDisplay: string): $CancellablePromise<
  */
 export function OpenDatabase(path: string, readOnly: boolean): $CancellablePromise<$models.OpenDatabaseResult> {
     return $Call.ByID(1785735212, path, readOnly).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType0($result);
     });
 }
 
@@ -83,7 +92,7 @@ export function PutValueIfUnchanged(path: string, keyDisplay: string, expectedVa
  */
 export function RefreshDatabase(path: string): $CancellablePromise<$models.OpenDatabaseResult> {
     return $Call.ByID(479048497, path).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType0($result);
     });
 }
 
@@ -96,6 +105,6 @@ export function RenameKey(path: string, oldKeyDisplay: string, newKeyDisplay: st
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = $models.OpenDatabaseResult.createFrom;
+const $$createType0 = $models.OpenDatabaseResult.createFrom;
+const $$createType1 = $Create.Array($Create.Any);
 const $$createType2 = $models.PutValueIfUnchangedResult.createFrom;

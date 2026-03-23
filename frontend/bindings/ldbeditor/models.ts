@@ -12,6 +12,7 @@ export class OpenDatabaseResult {
     "ok": boolean;
     "error": string;
     "canonicalPath": string;
+    "databaseMissing": boolean;
     "alreadyOpen": boolean;
     "readOnly": boolean;
     "forcedReadOnly": boolean;
@@ -29,6 +30,9 @@ export class OpenDatabaseResult {
         }
         if (!("canonicalPath" in $$source)) {
             this["canonicalPath"] = "";
+        }
+        if (!("databaseMissing" in $$source)) {
+            this["databaseMissing"] = false;
         }
         if (!("alreadyOpen" in $$source)) {
             this["alreadyOpen"] = false;

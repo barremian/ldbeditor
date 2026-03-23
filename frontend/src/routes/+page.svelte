@@ -31,6 +31,7 @@
     Check,
     Copy,
     Database,
+    DatabaseZap,
     FileText,
     FolderOpen,
     History,
@@ -63,8 +64,10 @@
 
   // Startup view state
   let isOpeningDatabase = false;
+  let isCreatingDatabase = false;
   let isLoadingKeys = false;
   let errorMessage = "";
+  let pendingCreatePath: string | null = null;
   type WorkspaceTab =
     | { id: string; type: "dashboard"; title: string }
     | { id: string; type: "database"; title: string; path: string };
@@ -598,6 +601,7 @@
   function resetEditorViewState() {
     valueRequestId += 1;
     stopAutoRefresh();
+    pendingCreatePath = null;
     dbPath = "";
     prettyPrintJson = false;
     dbForcedReadOnly = false;
@@ -618,6 +622,72 @@
     keyPendingDelete = null;
     pendingUnsavedClose = null;
     isValueEditing = false;
+  }
+
+  async function finishOpeningDatabase(
+    result: OpenDatabaseResult,
+    fallbackPath: string
+  ) {
+    const canonicalPath = result.canonicalPath || fallbackPath;
+    const forcedReadOnly = Boolean(result.forcedReadOnly);
+
+    pendingCreatePath = null;
+    setForcedReadOnlyState(
+      canonicalPath,
+      forcedReadOnly,
+      result.readOnlyReason || "",
+      result.lockedByApp || "",
+      Boolean(result.intentionalReadOnly)
+    );
+    recentPathsPreference.add(canonicalPath);
+
+    const activeTab = getActiveTab();
+    const activeDashboardTabId =
+      activeTab && activeTab.type === "dashboard" ? activeTab.id : null;
+    const existingTab = findDatabaseTabByPath(canonicalPath);
+
+    if (existingTab) {
+      if (result.alreadyOpen) {
+        try {
+          await LevelDBService.CloseDatabase(canonicalPath);
+        } catch {
+          // ignore lease rebalance failures while reusing an existing tab
+        }
+      }
+      if (activeDashboardTabId && activeDashboardTabId !== existingTab.id) {
+        tabs = tabs.filter((tab) => tab.id !== activeDashboardTabId);
+      }
+      await activateTab(existingTab.id, { skipDirtyCheck: true });
+      return;
+    }
+
+    if (activeDashboardTabId) {
+      delete tabStateMap[activeDashboardTabId];
+      tabStateMap = tabStateMap;
+      const replacementTab: WorkspaceTab = {
+        id: activeDashboardTabId,
+        type: "database",
+        title: getTabLabel(canonicalPath),
+        path: canonicalPath,
+      };
+      tabs = tabs.map((tab) =>
+        tab.id === activeDashboardTabId ? replacementTab : tab
+      );
+      await activateTab(activeDashboardTabId, {
+        skipDirtyCheck: true,
+        force: true,
+      });
+      return;
+    }
+
+    const newTab: WorkspaceTab = {
+      id: `tab-${nextTabId++}`,
+      type: "database",
+      title: getTabLabel(canonicalPath),
+      path: canonicalPath,
+    };
+    tabs = [...tabs, newTab];
+    await activateTab(newTab.id);
   }
 
   async function activateTab(
@@ -847,6 +917,7 @@
   async function openDatabaseFromPath(path: string, readOnly = false) {
     if (!path || path.trim() === "" || isOpeningDatabase) return;
 
+    pendingCreatePath = null;
     isOpeningDatabase = true;
     errorMessage = "";
 
@@ -856,64 +927,13 @@
         readOnly
       );
       if (result.ok) {
-        const canonicalPath = result.canonicalPath || path;
-        const forcedReadOnly = Boolean(result.forcedReadOnly);
-        setForcedReadOnlyState(
-          canonicalPath,
-          forcedReadOnly,
-          result.readOnlyReason || "",
-          result.lockedByApp || "",
-          Boolean(result.intentionalReadOnly)
-        );
-        recentPathsPreference.add(canonicalPath);
-        const activeTab = getActiveTab();
-        const activeDashboardTabId =
-          activeTab && activeTab.type === "dashboard" ? activeTab.id : null;
-        const existingTab = findDatabaseTabByPath(canonicalPath);
-        if (existingTab) {
-          if (result.alreadyOpen) {
-            try {
-              await LevelDBService.CloseDatabase(canonicalPath);
-            } catch {
-              // ignore lease rebalance failures while reusing an existing tab
-            }
-          }
-          if (activeDashboardTabId && activeDashboardTabId !== existingTab.id) {
-            tabs = tabs.filter((tab) => tab.id !== activeDashboardTabId);
-          }
-          await activateTab(existingTab.id, { skipDirtyCheck: true });
-          return;
-        }
-
-        if (activeDashboardTabId) {
-          delete tabStateMap[activeDashboardTabId];
-          tabStateMap = tabStateMap;
-          const replacementTab: WorkspaceTab = {
-            id: activeDashboardTabId,
-            type: "database",
-            title: getTabLabel(canonicalPath),
-            path: canonicalPath,
-          };
-          tabs = tabs.map((tab) =>
-            tab.id === activeDashboardTabId ? replacementTab : tab
-          );
-          await activateTab(activeDashboardTabId, {
-            skipDirtyCheck: true,
-            force: true,
-          });
-          return;
-        }
-
-        const newTab: WorkspaceTab = {
-          id: `tab-${nextTabId++}`,
-          type: "database",
-          title: getTabLabel(canonicalPath),
-          path: canonicalPath,
-        };
-        tabs = [...tabs, newTab];
-        await activateTab(newTab.id);
+        await finishOpeningDatabase(result, path);
       } else {
         isOpeningDatabase = false;
+        if (result.databaseMissing) {
+          pendingCreatePath = result.canonicalPath || path;
+          return;
+        }
         await Dialogs.Error({
           Title: "Invalid Database",
           Message:
@@ -931,6 +951,38 @@
       });
     } finally {
       isOpeningDatabase = false;
+    }
+  }
+
+  async function createDatabaseAtPendingPath() {
+    if (!pendingCreatePath || isCreatingDatabase) return;
+
+    isCreatingDatabase = true;
+    errorMessage = "";
+
+    try {
+      const requestedPath = pendingCreatePath;
+      const result: OpenDatabaseResult =
+        await LevelDBService.CreateDatabase(requestedPath);
+      if (result.ok) {
+        await finishOpeningDatabase(result, requestedPath);
+        return;
+      }
+
+      await Dialogs.Error({
+        Title: "Create Database Failed",
+        Message:
+          result.error ||
+          "The database could not be created at the selected location.",
+      });
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+      await Dialogs.Error({
+        Title: "Create Database Failed",
+        Message: errorMessage,
+      });
+    } finally {
+      isCreatingDatabase = false;
     }
   }
 
@@ -2124,108 +2176,155 @@
       onReorderTab={reorderTab}
     />
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
-      <Card class="w-full max-w-2xl">
-        <CardHeader class="space-y-4">
-          <div class="flex items-center justify-between">
-            <CardTitle class="flex items-center gap-2 text-2xl">
-              <Database class="h-6 w-6 text-primary" />
-              LevelDB Editor
-            </CardTitle>
-            <Badge variant="outline">Desktop</Badge>
-          </div>
-          <CardDescription>
-            Open a LevelDB folder to browse keys and inspect values instantly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-6">
-          <SplitButton
-            class="w-fit"
-            disabled={isOpeningDatabase}
-            triggerLabel="More open options"
-            on:primary={() => {
-              void openDatabaseFromDialog();
-            }}
+      {#if pendingCreatePath}
+        <div class="flex w-full max-w-2xl flex-col items-center gap-6 px-8 py-10 text-center">
+          <div
+            class="flex h-20 w-20 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary shadow-sm"
           >
-            <span class="inline-flex items-center gap-2">
-              <FolderOpen class="h-4 w-4" />
-              {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
-            </span>
+            <DatabaseZap class="h-10 w-10" />
+          </div>
 
-            <DropdownMenuItem
-              slot="menu"
-              disabled={isOpeningDatabase}
+          <div class="w-full space-y-3">
+            <h1 class="text-2xl font-semibold tracking-tight">
+              No LevelDB database found
+            </h1>
+            <p class="text-sm leading-6 text-muted-foreground">
+              The selected folder does not contain a LevelDB database yet.
+              Create a new database at this location to continue.
+            </p>
+            <div class="w-full max-w-full rounded-lg border border-border/70 bg-muted/35 px-4 py-3">
+              <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Selected folder
+              </p>
+              <p class="mt-2 max-w-full break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
+                {pendingCreatePath}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              disabled={isCreatingDatabase}
               on:click={() => {
-                void openDatabaseFromDialog(true);
+                pendingCreatePath = null;
               }}
             >
-              Open in read-only mode
-            </DropdownMenuItem>
-          </SplitButton>
+              Cancel
+            </Button>
+            <Button
+              disabled={isCreatingDatabase}
+              on:click={createDatabaseAtPendingPath}
+            >
+              <Plus class="mr-2 h-4 w-4" />
+              {isCreatingDatabase ? "Creating…" : "Create database here"}
+            </Button>
+          </div>
+        </div>
+      {:else}
+        <Card class="w-full max-w-2xl">
+          <CardHeader class="space-y-4">
+            <div class="flex items-center justify-between">
+              <CardTitle class="flex items-center gap-2 text-2xl">
+                <Database class="h-6 w-6 text-primary" />
+                LevelDB Editor
+              </CardTitle>
+              <Badge variant="outline">Desktop</Badge>
+            </div>
+            <CardDescription>
+              Open a LevelDB folder to browse keys and inspect values instantly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <SplitButton
+              class="w-fit"
+              disabled={isOpeningDatabase}
+              triggerLabel="More open options"
+              on:primary={() => {
+                void openDatabaseFromDialog();
+              }}
+            >
+              <span class="inline-flex items-center gap-2">
+                <FolderOpen class="h-4 w-4" />
+                {isOpeningDatabase ? "Opening…" : "Open LevelDB database"}
+              </span>
 
-          {#if errorMessage}
-            <p class="text-sm text-destructive">{errorMessage}</p>
-          {/if}
-
-          {#if $recentPathsPreference.length > 0}
-            <section class="space-y-3">
-              <h2
-                class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+              <DropdownMenuItem
+                slot="menu"
+                disabled={isOpeningDatabase}
+                on:click={() => {
+                  void openDatabaseFromDialog(true);
+                }}
               >
-                <History class="h-4 w-4" />
-                Recently opened
-              </h2>
-              <div class="space-y-2">
-                {#each $recentPathsPreference as item}
-                  <div class="group flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      class="min-w-0 flex-1 justify-start font-normal"
-                      on:click={() => openDatabaseFromPath(item.path, false)}
-                      title={item.path}
-                      disabled={isOpeningDatabase}
-                    >
-                      <span class="block truncate">{item.label}</span>
-                    </Button>
+                Open in read-only mode
+              </DropdownMenuItem>
+            </SplitButton>
 
-                    <ThreeDotMenu
-                      variant="ghost"
-                      class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                      triggerLabel={`More options for ${item.label}`}
-                      triggerTitle="More options"
-                      menuClass="min-w-56"
-                      disabled={isOpeningDatabase}
-                    >
-                      <DropdownMenuItem
-                        slot="menu"
+            {#if errorMessage}
+              <p class="text-sm text-destructive">{errorMessage}</p>
+            {/if}
+
+            {#if $recentPathsPreference.length > 0}
+              <section class="space-y-3">
+                <h2
+                  class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+                >
+                  <History class="h-4 w-4" />
+                  Recently opened
+                </h2>
+                <div class="space-y-2">
+                  {#each $recentPathsPreference as item}
+                    <div class="group flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        class="min-w-0 flex-1 justify-start font-normal"
+                        on:click={() => openDatabaseFromPath(item.path, false)}
+                        title={item.path}
                         disabled={isOpeningDatabase}
-                        on:click={() => {
-                          void openDatabaseFromPath(item.path, true);
-                        }}
                       >
-                        Open in read-only mode
-                      </DropdownMenuItem>
-                    </ThreeDotMenu>
+                        <span class="block truncate">{item.label}</span>
+                      </Button>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                      aria-label={`Remove ${item.label} from recently opened`}
-                      title="Remove from recently opened"
-                      on:click={() => {
-                        recentPathsPreference.remove(item.path);
-                      }}
-                      disabled={isOpeningDatabase}
-                    >
-                      <X class="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                {/each}
-              </div>
-            </section>
-          {/if}
-        </CardContent>
-      </Card>
+                      <ThreeDotMenu
+                        variant="ghost"
+                        class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                        triggerLabel={`More options for ${item.label}`}
+                        triggerTitle="More options"
+                        menuClass="min-w-56"
+                        disabled={isOpeningDatabase}
+                      >
+                        <DropdownMenuItem
+                          slot="menu"
+                          disabled={isOpeningDatabase}
+                          on:click={() => {
+                            void openDatabaseFromPath(item.path, true);
+                          }}
+                        >
+                          Open in read-only mode
+                        </DropdownMenuItem>
+                      </ThreeDotMenu>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                        aria-label={`Remove ${item.label} from recently opened`}
+                        title="Remove from recently opened"
+                        on:click={() => {
+                          recentPathsPreference.remove(item.path);
+                        }}
+                        disabled={isOpeningDatabase}
+                      >
+                        <X class="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  {/each}
+                </div>
+              </section>
+            {/if}
+          </CardContent>
+        </Card>
+      {/if}
     </div>
   </div>
 {/if}

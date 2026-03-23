@@ -49,6 +49,7 @@ type OpenDatabaseResult struct {
 	Ok                  bool   `json:"ok"`
 	Error               string `json:"error"`
 	CanonicalPath       string `json:"canonicalPath"`
+	DatabaseMissing     bool   `json:"databaseMissing"`
 	AlreadyOpen         bool   `json:"alreadyOpen"`
 	ReadOnly            bool   `json:"readOnly"`
 	ForcedReadOnly      bool   `json:"forcedReadOnly"`
@@ -95,11 +96,52 @@ func (s *LevelDBService) OpenDatabase(path string, readOnly bool) OpenDatabaseRe
 		}
 	}
 
+	if !readOnly && !isExistingLevelDB(canonicalPath) {
+		return OpenDatabaseResult{
+			Ok:              false,
+			CanonicalPath:   canonicalPath,
+			DatabaseMissing: true,
+		}
+	}
+
 	opened, openErr := openDatabaseHandle(canonicalPath, readOnly)
 	if openErr != nil {
 		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
 	}
 
+	s.storeOpenedDatabase(canonicalPath, opened)
+	return openResultFromEntry(canonicalPath, false, s.dbs[canonicalPath])
+}
+
+// CreateDatabase creates and opens a new writable LevelDB database at the given path.
+func (s *LevelDBService) CreateDatabase(path string) OpenDatabaseResult {
+	canonicalPath, err := canonicalizePath(path)
+	if err != nil {
+		return OpenDatabaseResult{Ok: false, Error: err.Error()}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dbs == nil {
+		s.dbs = map[string]*dbEntry{}
+	}
+
+	if existing, ok := s.dbs[canonicalPath]; ok {
+		existing.refCount++
+		return openResultFromEntry(canonicalPath, true, existing)
+	}
+
+	opened, openErr := openDatabaseHandle(canonicalPath, false)
+	if openErr != nil {
+		return OpenDatabaseResult{Ok: false, Error: openErr.Error()}
+	}
+
+	s.storeOpenedDatabase(canonicalPath, opened)
+	return openResultFromEntry(canonicalPath, false, s.dbs[canonicalPath])
+}
+
+func (s *LevelDBService) storeOpenedDatabase(canonicalPath string, opened *openedDB) {
 	s.dbs[canonicalPath] = &dbEntry{
 		db:                  opened.db,
 		forcedReadOnly:      opened.forcedReadOnly,
@@ -108,7 +150,6 @@ func (s *LevelDBService) OpenDatabase(path string, readOnly bool) OpenDatabaseRe
 		lockedByApp:         opened.lockedByApp,
 		refCount:            1,
 	}
-	return openResultFromEntry(canonicalPath, false, s.dbs[canonicalPath])
 }
 
 // RefreshDatabase closes and reopens an already-open database path so reads reflect external updates.
@@ -528,6 +569,11 @@ func parseLsofProcessName(output []byte, skipPID int) string {
 		}
 	}
 	return ""
+}
+
+func isExistingLevelDB(path string) bool {
+	info, err := os.Stat(filepath.Join(path, "CURRENT"))
+	return err == nil && !info.IsDir()
 }
 
 func canonicalizePath(path string) (string, error) {

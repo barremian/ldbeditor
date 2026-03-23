@@ -12,7 +12,7 @@ import {
 
 export type RecentPathItem = { path: string; label: string };
 
-const MAX_RECENT = 10;
+const MAX_RECENT = 5;
 const LEGACY_KEY = "recent-leveldb-paths";
 const STORAGE_KEY = "ldbeditor-recent-leveldb-paths";
 const CHANNEL = "ldbeditor-recent-paths-sync";

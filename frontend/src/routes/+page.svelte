@@ -2229,7 +2229,6 @@
                 <Database class="h-6 w-6 text-primary" />
                 LevelDB Editor
               </CardTitle>
-              <Badge variant="outline">Desktop</Badge>
             </div>
             <CardDescription>
               Open a LevelDB folder to browse keys and inspect values instantly.

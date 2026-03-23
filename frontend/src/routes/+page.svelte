@@ -1816,7 +1816,7 @@
                           data-key-item-selected={selectedKey === key
                             ? "true"
                             : undefined}
-                          class={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          class={`relative overflow-hidden flex items-center rounded-md px-2 py-1.5 text-sm transition-colors ${
                             selectedKey === key
                               ? "bg-primary/15 text-primary"
                               : "hover:bg-muted"
@@ -1876,14 +1876,19 @@
                             </div>
                           {:else}
                             <button
-                              class="min-w-0 flex-1 text-left"
+                              class="min-w-0 flex-1 text-left transition-[padding] duration-150 group-hover:pr-15 group-focus-within:pr-15"
                               title={key}
                               on:click={() => selectKey(key)}
                             >
                               <span class="block w-full truncate">{key}</span>
                             </button>
                             <div
-                              class="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                              class="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 pl-8 pr-2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                              style={`background: linear-gradient(to right, transparent, ${
+                                selectedKey === key
+                                  ? "color-mix(in srgb, hsl(var(--primary)) 15%, hsl(var(--card)))"
+                                  : "hsl(var(--muted))"
+                              } 1.75rem);`}
                             >
                               <Button
                                 variant="ghost"

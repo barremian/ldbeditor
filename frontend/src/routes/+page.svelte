@@ -659,7 +659,7 @@
       if (activeDashboardTabId && activeDashboardTabId !== existingTab.id) {
         tabs = tabs.filter((tab) => tab.id !== activeDashboardTabId);
       }
-      await activateTab(existingTab.id, { skipDirtyCheck: true });
+      await activateTab(existingTab.id);
       return;
     }
 
@@ -675,10 +675,7 @@
       tabs = tabs.map((tab) =>
         tab.id === activeDashboardTabId ? replacementTab : tab
       );
-      await activateTab(activeDashboardTabId, {
-        skipDirtyCheck: true,
-        force: true,
-      });
+      await activateTab(activeDashboardTabId, { force: true });
       return;
     }
 
@@ -694,15 +691,9 @@
 
   async function activateTab(
     tabId: string,
-    options: { skipDirtyCheck?: boolean; force?: boolean } = {}
+    options: { force?: boolean } = {}
   ) {
     if (tabId === activeTabId && !options.force) return;
-    if (
-      !options.skipDirtyCheck &&
-      isDirty &&
-      !(await confirmDiscardUnsavedChanges())
-    )
-      return;
 
     const nextTab = tabs.find((tab) => tab.id === tabId);
     if (!nextTab) return;
@@ -801,14 +792,14 @@
         title: "Dashboard",
       };
       tabs = [dashboardTab];
-      await activateTab(dashboardTab.id, { skipDirtyCheck: true, force: true });
+      await activateTab(dashboardTab.id, { force: true });
       return;
     }
 
     if (!closingActiveTab) return;
 
     const nextIndex = Math.max(0, Math.min(tabIndex, tabs.length - 1));
-    await activateTab(tabs[nextIndex].id, { skipDirtyCheck: true });
+    await activateTab(tabs[nextIndex].id);
   }
 
   async function requestCloseTab(

@@ -877,10 +877,13 @@
       if (
         activeTab &&
         activeTab.type === "database" &&
-        activeTab.id === activeTabId &&
-        isDirty
+        activeTab.id === activeTabId
       ) {
-        pendingUnsavedClose = { tabId: activeTab.id, closeWindowAfter: true };
+        if (isDirty) {
+          pendingUnsavedClose = { tabId: activeTab.id, closeWindowAfter: false };
+          return;
+        }
+        await requestCloseTab(activeTab.id);
         return;
       }
       if (confirmCloseLastTabPreference.get()) {

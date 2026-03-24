@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { ChevronLeft, ChevronRight, Plus, X } from "lucide-svelte";
+  import { Asterisk, ChevronLeft, ChevronRight, Plus, X } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
@@ -363,7 +363,7 @@
                     class="absolute inset-0 flex items-center justify-center opacity-100 transition-all duration-150 ease-out group-hover/tab:scale-75 group-hover/tab:opacity-0"
                     aria-hidden="true"
                   >
-                    <span class="h-2 w-2 rounded-full bg-foreground/50"></span>
+                    <Asterisk class="h-3.5 w-3.5 text-muted-foreground" />
                   </span>
                   <span
                     class="absolute inset-0 flex items-center justify-center scale-75 opacity-0 transition-all duration-150 ease-out group-hover/tab:scale-100 group-hover/tab:opacity-100"

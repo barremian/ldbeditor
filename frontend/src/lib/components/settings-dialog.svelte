@@ -116,7 +116,7 @@
 
       <CardContent class="min-h-0 flex-1 p-0">
         <div
-          class="flex h-full w-full flex-1 min-h-[460px] overflow-hidden text-sm text-foreground"
+          class="flex h-full w-full flex-1 overflow-hidden text-sm text-foreground"
         >
           <div class="m-4 mr-0 flex w-56 min-h-0 shrink-0 flex-col">
             <nav

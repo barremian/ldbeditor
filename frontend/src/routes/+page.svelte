@@ -267,6 +267,23 @@
     !effectiveReadOnly &&
     !isSaving &&
     !valueValidationError;
+  $: canSaveAndClosePendingTab = (() => {
+    if (!pendingUnsavedClose || isSaving) return false;
+
+    const { tabId } = pendingUnsavedClose;
+    if (tabId === activeTabId) return canSaveValueChanges;
+
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab || tab.type !== "database") return false;
+    if (getForcedReadOnlyState(tab.path)) return false;
+
+    const state = tabStateMap[tabId];
+    if (!state || state.selectedKey === null || !state.isValueEditing) {
+      return false;
+    }
+
+    return !getHexValidationError(state.editorValueRaw, "Value");
+  })();
 
   function scheduleDebouncedKeySearch(value: string) {
     if (keySearchDebounceTimeout) {
@@ -822,7 +839,7 @@
     if (!canCloseTab(tab)) return;
 
     const closeWindowAfter = Boolean(options.closeWindowAfter);
-    if (tabId === activeTabId && isDirty) {
+    if (dirtyTabIds.has(tabId)) {
       pendingUnsavedClose = { tabId, closeWindowAfter };
       return;
     }
@@ -853,13 +870,7 @@
     if (!pendingUnsavedClose || isSaving) return;
     const { tabId, closeWindowAfter } = pendingUnsavedClose;
     if (tabId !== activeTabId) {
-      pendingUnsavedClose = null;
-      if (closeWindowAfter) {
-        await WindowService.CloseCurrentWindow();
-      } else {
-        await executeCloseTab(tabId);
-      }
-      return;
+      await activateTab(tabId);
     }
 
     await saveValue({ closeEditorOnSuccess: true });
@@ -2455,7 +2466,7 @@
         </Button>
         <Button
           size="sm"
-          disabled={isSaving || !canSaveValueChanges}
+          disabled={!canSaveAndClosePendingTab}
           on:click={saveAndClosePending}
         >
           {#if isSaving}

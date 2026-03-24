@@ -108,6 +108,7 @@
   let editorSplitContainer: HTMLDivElement | null = null;
   let detachPointerListeners: (() => void) | null = null;
   let isDirty = false;
+  let dirtyTabIds = new Set<string>();
   let valueValidationError = "";
   let createKeyValidationError = "";
   let createValueValidationError = "";
@@ -226,6 +227,16 @@
   }
 
   $: isDirty = selectedKey !== null && editorValueRaw !== originalValueRaw;
+  $: dirtyTabIds = new Set(
+    tabs
+      .filter((tab) => {
+        if (tab.type !== "database") return false;
+        if (tab.id === activeTabId) return isDirty;
+        const state = tabStateMap[tab.id];
+        return state ? state.editorValueRaw !== state.originalValueRaw : false;
+      })
+      .map((tab) => tab.id)
+  );
   $: valueValidationError = getHexValidationError(editorValueRaw, "Value");
   $: createKeyValidationError = getHexValidationError(newKeyInput, "New key");
   $: createValueValidationError = getHexValidationError(
@@ -1559,6 +1570,7 @@
       {tabs}
       {activeTabId}
       {canCloseTab}
+      {dirtyTabIds}
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}
@@ -2179,6 +2191,7 @@
       {tabs}
       {activeTabId}
       {canCloseTab}
+      {dirtyTabIds}
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}

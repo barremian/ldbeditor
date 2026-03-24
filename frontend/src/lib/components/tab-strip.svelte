@@ -12,6 +12,7 @@
   export let tabs: WorkspaceTab[] = [];
   export let activeTabId = "";
   export let canCloseTab: (tab: WorkspaceTab) => boolean = () => false;
+  export let dirtyTabIds = new Set<string>();
   export let onTabChange: (tabId: string | undefined) => void = () => {};
   export let onCloseTab: (tabId: string) => void | Promise<void> = () => {};
   export let onAddDashboardTab: () => void | Promise<void> = () => {};
@@ -311,7 +312,7 @@
             </div>
           {/if}
           <div
-            class={`-mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
+            class={`group/tab -mb-px flex max-w-[264px] items-center gap-1 rounded-t-md border border-transparent pl-1 pr-1 ${
               activeTabId === tab.id
                 ? "relative z-10 border-t-border border-l-border border-r-border border-b-transparent bg-background text-foreground"
                 : `text-muted-foreground hover:bg-muted/40 ${
@@ -338,10 +339,10 @@
           >
             <TabsTrigger
               value={tab.id}
-              class="min-w-0 max-w-[220px] flex-1 rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              class="flex min-w-0 max-w-[220px] flex-1 items-center rounded-none bg-transparent px-2 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               title={tab.type === "database" ? tab.path : tab.title}
             >
-              <span class="block truncate">
+              <span class="block min-w-0 flex-1 truncate">
                 {tab.type === "database" ? tab.title : "Dashboard"}
               </span>
             </TabsTrigger>
@@ -349,7 +350,7 @@
               <Button
                 variant="ghost"
                 size="icon"
-                class="ml-0.5 h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                class="relative ml-0.5 h-6 w-6 shrink-0 text-muted-foreground transition-colors duration-150 hover:text-foreground"
                 data-tab-close-button="true"
                 title={`Close ${tab.title}`}
                 on:click={(event) => {
@@ -357,7 +358,23 @@
                   void onCloseTab(tab.id);
                 }}
               >
-                <X class="h-3.5 w-3.5" />
+                {#if dirtyTabIds.has(tab.id)}
+                  <span
+                    class="absolute inset-0 flex items-center justify-center opacity-100 transition-all duration-150 ease-out group-hover/tab:scale-75 group-hover/tab:opacity-0"
+                    aria-hidden="true"
+                  >
+                    <span class="h-2 w-2 rounded-full bg-foreground/50"></span>
+                  </span>
+                  <span
+                    class="absolute inset-0 flex items-center justify-center scale-75 opacity-0 transition-all duration-150 ease-out group-hover/tab:scale-100 group-hover/tab:opacity-100"
+                    aria-hidden="true"
+                  >
+                    <X class="h-3.5 w-3.5" />
+                  </span>
+                  <span class="sr-only">Close {tab.title}</span>
+                {:else}
+                  <X class="h-3.5 w-3.5" />
+                {/if}
               </Button>
             {/if}
           </div>

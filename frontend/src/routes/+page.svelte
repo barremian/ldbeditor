@@ -25,6 +25,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import SettingsDialog from "$lib/components/settings-dialog.svelte";
   import TabStrip from "$lib/components/tab-strip.svelte";
   import ValueCodeMirror from "$lib/components/value-codemirror.svelte";
   import {
@@ -98,6 +99,7 @@
   let keyPendingDelete: string | null = null;
   let pendingUnsavedClose: PendingUnsavedClose | null = null;
   let pendingCloseLastTab = false;
+  let showSettingsDialog = false;
   let isValueEditing = false;
   let valueLoading = false;
   let isDesktopLayout = false;
@@ -348,7 +350,7 @@
     event: { value: string } | CustomEvent<{ value: string }>
   ) {
     const nextValue =
-      "detail" in event ? event.detail?.value ?? "" : event.value ?? "";
+      "detail" in event ? (event.detail?.value ?? "") : (event.value ?? "");
     editorValue = nextValue;
     editorValueRaw = nextValue;
   }
@@ -755,7 +757,10 @@
     const sourceIndex = tabs.findIndex((tab) => tab.id === tabId);
     if (sourceIndex === -1) return;
 
-    const clampedTargetIndex = Math.max(0, Math.min(targetIndex, tabs.length - 1));
+    const clampedTargetIndex = Math.max(
+      0,
+      Math.min(targetIndex, tabs.length - 1)
+    );
     if (clampedTargetIndex === sourceIndex) return;
 
     const nextTabs = [...tabs];
@@ -1438,9 +1443,16 @@
       }
       void saveValueOnly();
     });
+    const unregisterToggleSettings = Events.On("app:toggleSettings", () => {
+      showSettingsDialog = !showSettingsDialog;
+    });
 
     const unregisterShortcutHandlers = [
       shortcutManager.registerHandler(ShortcutCommand.Escape, () => {
+        if (showSettingsDialog) {
+          showSettingsDialog = false;
+          return;
+        }
         if (editingKey) {
           resetRenameForm();
           return;
@@ -1524,6 +1536,7 @@
       window.removeEventListener("blur", onWindowBlur);
       unregisterCloseFromMenu();
       unregisterSaveFromMenu();
+      unregisterToggleSettings();
       unregisterShortcutHandlers.forEach((unregister) => unregister());
       stopPaneResize();
     };
@@ -1539,7 +1552,6 @@
       clearTimeout(copyValueFeedbackTimeout);
     }
   });
-
 </script>
 
 {#if dbPath}
@@ -1594,7 +1606,10 @@
             triggerIconClass="h-3.5 w-3.5"
             on:primary={triggerManualRefresh}
           >
-            <span class="inline-flex items-center gap-1.5" title={getRefreshButtonTitle()}>
+            <span
+              class="inline-flex items-center gap-1.5"
+              title={getRefreshButtonTitle()}
+            >
               {#if isRefreshing}
                 <RefreshCcw class="h-3.5 w-3.5 animate-spin" />
               {:else if autoRefreshIntervalMs > 0}
@@ -2177,7 +2192,9 @@
     />
     <div class="flex min-h-0 flex-1 items-center justify-center p-6">
       {#if pendingCreatePath}
-        <div class="flex w-full max-w-2xl flex-col items-center gap-6 px-8 py-10 text-center">
+        <div
+          class="flex w-full max-w-2xl flex-col items-center gap-6 px-8 py-10 text-center"
+        >
           <div
             class="flex h-20 w-20 items-center justify-center rounded-full border border-border/70 bg-muted/60 text-primary shadow-sm"
           >
@@ -2192,11 +2209,17 @@
               The selected folder does not contain a LevelDB database yet.
               Create a new database at this location to continue.
             </p>
-            <div class="w-full max-w-full rounded-lg border border-border/70 bg-muted/35 px-4 py-3">
-              <p class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            <div
+              class="w-full max-w-full rounded-lg border border-border/70 bg-muted/35 px-4 py-3"
+            >
+              <p
+                class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+              >
                 Selected folder
               </p>
-              <p class="mt-2 max-w-full break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]">
+              <p
+                class="mt-2 max-w-full break-words font-mono text-sm text-foreground [overflow-wrap:anywhere]"
+              >
                 {pendingCreatePath}
               </p>
             </div>
@@ -2351,8 +2374,8 @@
       <CardHeader class="space-y-2">
         <CardTitle id="delete-key-title">Delete key?</CardTitle>
         <CardDescription id="delete-key-description">
-          Delete <span class="break-all font-semibold">{keyPendingDelete}</span>? This action
-          cannot be undone.
+          Delete <span class="break-all font-semibold">{keyPendingDelete}</span
+          >? This action cannot be undone.
         </CardDescription>
       </CardHeader>
       <CardContent class="flex justify-end gap-2">
@@ -2463,7 +2486,11 @@
         </CardDescription>
       </CardHeader>
       <CardContent class="flex justify-end gap-2">
-        <Button variant="outline" size="sm" on:click={cancelPendingCloseLastTab}>
+        <Button
+          variant="outline"
+          size="sm"
+          on:click={cancelPendingCloseLastTab}
+        >
           Cancel
         </Button>
         <SplitButton
@@ -2490,3 +2517,8 @@
     </Card>
   </div>
 {/if}
+
+<SettingsDialog
+  open={showSettingsDialog}
+  on:close={() => (showSettingsDialog = false)}
+/>

@@ -4,6 +4,7 @@ declare module "@wailsio/runtime" {
     interface CustomEvents {
       "app:closeActiveTabOrWindow": string;
       "app:saveValue": string;
+      "app:toggleSettings": string;
     }
   }
 }

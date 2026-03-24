@@ -26,6 +26,7 @@ func init() {
 	application.RegisterEvent[string]("time")
 	application.RegisterEvent[string]("app:closeActiveTabOrWindow")
 	application.RegisterEvent[string]("app:saveValue")
+	application.RegisterEvent[string]("app:toggleSettings")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -36,10 +37,9 @@ func main() {
 	const settingsShortcut = "CmdOrCtrl+,"
 	const appName = "LevelDB Editor"
 
-	var showSettingsWindow func()
+	var app *application.App
 	var persistMainWindowState func()
 	var mainWindow application.Window
-	var settingsWindow application.Window
 	isWindows := runtime.GOOS == "windows"
 	keyBindings := map[string]func(window application.Window){}
 	var stateStore *windowStateStore
@@ -51,9 +51,7 @@ func main() {
 
 	if !isWindows {
 		keyBindings[settingsShortcut] = func(window application.Window) {
-			if showSettingsWindow != nil {
-				showSettingsWindow()
-			}
+			app.Event.Emit("app:toggleSettings", "")
 		}
 	}
 
@@ -83,7 +81,7 @@ func main() {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	app := application.New(application.Options{
+	app = application.New(application.Options{
 		Name:        appName,
 		Description: "View and edit LevelDB databases",
 		Services: []application.Service{
@@ -113,50 +111,6 @@ func main() {
 		window.HideMenuBar()
 	}
 
-	showSettingsWindow = func() {
-		if settingsWindow == nil {
-			var exists bool
-			settingsWindow, exists = app.Window.GetByName(settingsWindowName)
-			if !exists {
-				settingsWindow = nil
-			}
-		}
-
-		if settingsWindow == nil {
-			settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-				Name:                settingsWindowName,
-				Title:               "Preferences",
-				Width:               860,
-				Height:              620,
-				MinWidth:            860,
-				MinHeight:           620,
-				MaxWidth:            860,
-				MaxHeight:           620,
-				DisableResize:       true,
-				MinimiseButtonState: application.ButtonDisabled,
-				MaximiseButtonState: application.ButtonDisabled,
-				Hidden:              true,
-				BackgroundColour:    application.NewRGB(242, 242, 247),
-				URL:                 "/settings",
-				UseApplicationMenu:  true,
-				Mac: application.MacWindow{
-					Backdrop:           application.MacBackdropNormal,
-					TitleBar:           application.MacTitleBarDefault,
-					CollectionBehavior: application.MacWindowCollectionBehaviorFullScreenNone,
-				},
-			})
-			settingsWindow.OnWindowEvent(events.Common.WindowClosing, func(_ *application.WindowEvent) {
-				settingsWindow = nil
-			})
-			applyWindowsMenuVisibilityPolicy(settingsWindow)
-		}
-		if settingsWindow.IsMinimised() {
-			settingsWindow.UnMinimise()
-		}
-		settingsWindow.Show()
-		settingsWindow.Focus()
-	}
-
 	menu := app.Menu.New()
 
 	if !isWindows {
@@ -167,7 +121,7 @@ func main() {
 			appMenu.Add("Settings...").
 				SetAccelerator(settingsShortcut).
 				OnClick(func(_ *application.Context) {
-					showSettingsWindow()
+					app.Event.Emit("app:toggleSettings", "")
 				})
 			appMenu.AddSeparator()
 			appMenu.AddRole(application.ServicesMenu)
@@ -184,7 +138,7 @@ func main() {
 	if isWindows {
 		preferencesMenu := fileMenu.AddSubmenu("Preferences")
 		preferencesMenu.Add("Settings").OnClick(func(_ *application.Context) {
-			showSettingsWindow()
+			app.Event.Emit("app:toggleSettings", "")
 		})
 		fileMenu.AddSeparator()
 	}

@@ -16,6 +16,7 @@ export type TabViewState = {
   originalValueRaw: string;
   editorValueRaw: string;
   isValueEditing: boolean;
+  autoRefreshIntervalMs: number;
 };
 
 export function getTabLabel(path: string): string {

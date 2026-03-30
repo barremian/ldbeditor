@@ -137,6 +137,7 @@ export function createAutoRefreshController(options: AutoRefreshOptions) {
 
   return {
     subscribe: store.subscribe,
+    getState: () => state,
     setIntervalMs,
     schedule,
     pause,

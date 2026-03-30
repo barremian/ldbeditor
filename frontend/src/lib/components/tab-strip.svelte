@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { Asterisk, ChevronLeft, ChevronRight, Plus, X } from "lucide-svelte";
+  import {
+    Asterisk,
+    ChevronLeft,
+    ChevronRight,
+    Plus,
+    X,
+  } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
@@ -10,6 +16,7 @@
   export let activeTabId = "";
   export let canCloseTab: (tab: WorkspaceTab) => boolean = () => false;
   export let dirtyTabIds = new Set<string>();
+  export let autoRefreshProgressByTab: Record<string, number> = {};
   export let onTabChange: (tabId: string | undefined) => void = () => {};
   export let onCloseTab: (tabId: string) => void | Promise<void> = () => {};
   export let onAddDashboardTab: () => void | Promise<void> = () => {};
@@ -21,6 +28,8 @@
   const SCROLL_STEP_PX = 240;
   const EDGE_TOLERANCE_PX = 2;
   const DRAG_START_THRESHOLD_PX = 4;
+  const REFRESH_RING_RADIUS = 5;
+  const REFRESH_RING_CIRCUMFERENCE = 2 * Math.PI * REFRESH_RING_RADIUS;
 
   let viewportEl: HTMLDivElement | undefined = undefined;
   let hasHorizontalOverflow = false;
@@ -343,36 +352,74 @@
                 {tab.type === "database" ? tab.title : "Dashboard"}
               </span>
             </TabsTrigger>
-            {#if canCloseTab(tab)}
-              <Button
-                variant="ghost"
-                size="icon"
-                class="relative ml-0.5 h-6 w-6 shrink-0 text-muted-foreground transition-colors duration-150 hover:text-foreground"
-                data-tab-close-button="true"
-                title={`Close ${tab.title}`}
-                on:click={(event) => {
-                  event.stopPropagation();
-                  void onCloseTab(tab.id);
-                }}
-              >
-                {#if dirtyTabIds.has(tab.id)}
-                  <span
-                    class="absolute inset-0 flex items-center justify-center opacity-100 transition-all duration-150 ease-out group-hover/tab:scale-75 group-hover/tab:opacity-0"
-                    aria-hidden="true"
+            {#if autoRefreshProgressByTab[tab.id] !== undefined || canCloseTab(tab)}
+              <div class="flex shrink-0 items-center gap-0">
+                {#if autoRefreshProgressByTab[tab.id] !== undefined}
+                  <div
+                    class="flex h-6 w-4 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-150 group-hover/tab:text-foreground"
+                    title={`${tab.title} auto-refresh enabled`}
+                    aria-label={`${tab.title} auto-refresh enabled`}
                   >
-                    <Asterisk class="h-3.5 w-3.5 text-muted-foreground" />
-                  </span>
-                  <span
-                    class="absolute inset-0 flex items-center justify-center scale-75 opacity-0 transition-all duration-150 ease-out group-hover/tab:scale-100 group-hover/tab:opacity-100"
-                    aria-hidden="true"
-                  >
-                    <X class="h-3.5 w-3.5" />
-                  </span>
-                  <span class="sr-only">Close {tab.title}</span>
-                {:else}
-                  <X class="h-3.5 w-3.5" />
+                    <svg
+                      class="h-3.5 w-3.5 -rotate-90"
+                      viewBox="0 0 16 16"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r={REFRESH_RING_RADIUS}
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="opacity-20"
+                      />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r={REFRESH_RING_RADIUS}
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-dasharray={`${REFRESH_RING_CIRCUMFERENCE} ${REFRESH_RING_CIRCUMFERENCE}`}
+                        stroke-dashoffset={`${REFRESH_RING_CIRCUMFERENCE * (1 - autoRefreshProgressByTab[tab.id])}`}
+                      />
+                    </svg>
+                  </div>
                 {/if}
-              </Button>
+                {#if canCloseTab(tab)}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="relative h-6 w-6 shrink-0 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                    data-tab-close-button="true"
+                    title={`Close ${tab.title}`}
+                    on:click={(event) => {
+                      event.stopPropagation();
+                      void onCloseTab(tab.id);
+                    }}
+                  >
+                    {#if dirtyTabIds.has(tab.id)}
+                      <span
+                        class="absolute inset-0 flex items-center justify-center opacity-100 transition-all duration-150 ease-out group-hover/tab:scale-75 group-hover/tab:opacity-0"
+                        aria-hidden="true"
+                      >
+                        <Asterisk class="h-3.5 w-3.5 text-muted-foreground" />
+                      </span>
+                      <span
+                        class="absolute inset-0 flex items-center justify-center scale-75 opacity-0 transition-all duration-150 ease-out group-hover/tab:scale-100 group-hover/tab:opacity-100"
+                        aria-hidden="true"
+                      >
+                        <X class="h-3.5 w-3.5" />
+                      </span>
+                      <span class="sr-only">Close {tab.title}</span>
+                    {:else}
+                      <X class="h-3.5 w-3.5" />
+                    {/if}
+                  </Button>
+                {/if}
+              </div>
             {/if}
           </div>
         {/each}

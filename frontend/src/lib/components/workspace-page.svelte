@@ -46,19 +46,19 @@
   const GRID_GAP_PX = 16;
   const MIN_REFRESH_FEEDBACK_MS = 150;
   const shortcutManager = createShortcutManager(shortcutConfig);
-
-  let autoRefreshState: AutoRefreshState = {
+  const createEmptyAutoRefreshState = (): AutoRefreshState => ({
     intervalMs: 0,
     nextRefreshAt: null,
     countdownNow: Date.now(),
-  };
+  });
 
-  const autoRefresh = createAutoRefreshController({
-    onTick: () => void runAutoRefreshTick(),
-  });
-  const unsubscribeAutoRefresh = autoRefresh.subscribe((value) => {
-    autoRefreshState = value;
-  });
+  type AutoRefreshController = ReturnType<typeof createAutoRefreshController>;
+
+  let autoRefreshState: AutoRefreshState = createEmptyAutoRefreshState();
+  let activeAutoRefreshUnsubscribe: (() => void) | null = null;
+  let tabAutoRefreshMap: Record<string, AutoRefreshController> = {};
+  let tabAutoRefreshStateMap: Record<string, AutoRefreshState> = {};
+  let tabAutoRefreshCleanupMap: Record<string, () => void> = {};
 
   let isOpeningDatabase = false;
   let isCreatingDatabase = false;
@@ -140,6 +140,7 @@
   let autoRefreshLabel = "Off";
   let remainingAutoRefreshMs = 0;
   let autoRefreshProgress = 1;
+  let autoRefreshProgressByTab: Record<string, number> = {};
   let canSaveValueChanges = false;
   let canSaveAndClosePendingTab = false;
 
@@ -181,6 +182,28 @@
   $: remainingAutoRefreshMs = getRemainingAutoRefreshMs(autoRefreshState);
   $: autoRefreshProgress = getAutoRefreshProgress(autoRefreshState);
   $: autoRefreshLabel = getAutoRefreshLabel(autoRefreshIntervalMs);
+  $: autoRefreshProgressByTab = (() => {
+    const nextProgressByTab: Record<string, number> = {};
+
+    tabs.forEach((tab) => {
+      if (tab.type !== "database") return;
+
+      const state =
+        tabAutoRefreshStateMap[tab.id] ??
+        (tabStateMap[tab.id]
+          ? {
+              intervalMs: tabStateMap[tab.id].autoRefreshIntervalMs,
+              nextRefreshAt: null,
+              countdownNow: Date.now(),
+            }
+          : null);
+
+      if (!state || state.intervalMs <= 0) return;
+      nextProgressByTab[tab.id] = getAutoRefreshProgress(state);
+    });
+
+    return nextProgressByTab;
+  })();
   $: canSaveValueChanges =
     selectedKey !== null &&
     isValueEditing &&
@@ -355,7 +378,23 @@
   }
 
   function setAutoRefreshInterval(intervalMs: number) {
-    autoRefresh.setIntervalMs(intervalMs, dbPath);
+    const activeTab = getActiveTab();
+    if (!activeTab || activeTab.type !== "database") return;
+
+    const controller = getTabAutoRefreshController(activeTab.id);
+    if (!controller) return;
+
+    controller.setIntervalMs(intervalMs, activeTab.path);
+
+    if (tabStateMap[activeTab.id]) {
+      tabStateMap = {
+        ...tabStateMap,
+        [activeTab.id]: {
+          ...tabStateMap[activeTab.id],
+          autoRefreshIntervalMs: intervalMs,
+        },
+      };
+    }
   }
 
   function getRefreshButtonTitle() {
@@ -477,6 +516,94 @@
     );
   }
 
+  function getDatabaseTabById(tabId: string) {
+    const tab = tabs.find((candidate) => candidate.id === tabId);
+    return tab?.type === "database" ? tab : null;
+  }
+
+  function getTabAutoRefreshController(tabId: string) {
+    const existing = tabAutoRefreshMap[tabId];
+    if (existing) return existing;
+
+    const tab = getDatabaseTabById(tabId);
+    if (!tab) return null;
+
+    const controller = createAutoRefreshController({
+      onTick: () => void runAutoRefreshTick(tabId),
+    });
+    const cleanup = controller.subscribe((value) => {
+      tabAutoRefreshStateMap = {
+        ...tabAutoRefreshStateMap,
+        [tabId]: value,
+      };
+    });
+    const savedIntervalMs = tabStateMap[tabId]?.autoRefreshIntervalMs ?? 0;
+    if (savedIntervalMs > 0) {
+      controller.setIntervalMs(savedIntervalMs, tab.path);
+    }
+
+    tabAutoRefreshMap = {
+      ...tabAutoRefreshMap,
+      [tabId]: controller,
+    };
+    tabAutoRefreshCleanupMap = {
+      ...tabAutoRefreshCleanupMap,
+      [tabId]: cleanup,
+    };
+    return controller;
+  }
+
+  function subscribeToActiveAutoRefresh(tabId: string | null) {
+    if (activeAutoRefreshUnsubscribe) {
+      activeAutoRefreshUnsubscribe();
+      activeAutoRefreshUnsubscribe = null;
+    }
+
+    if (!tabId) {
+      autoRefreshState = createEmptyAutoRefreshState();
+      return;
+    }
+
+    const controller = getTabAutoRefreshController(tabId);
+    if (!controller) {
+      autoRefreshState = createEmptyAutoRefreshState();
+      return;
+    }
+
+    activeAutoRefreshUnsubscribe = controller.subscribe((value) => {
+      autoRefreshState = value;
+    });
+  }
+
+  function getActiveAutoRefreshController() {
+    const activeTab = getActiveTab();
+    if (!activeTab || activeTab.type !== "database") {
+      return null;
+    }
+    return getTabAutoRefreshController(activeTab.id);
+  }
+
+  function destroyTabAutoRefreshController(tabId: string) {
+    const controller = tabAutoRefreshMap[tabId];
+    if (!controller) return;
+    tabAutoRefreshCleanupMap[tabId]?.();
+
+    if (tabId === activeTabId) {
+      subscribeToActiveAutoRefresh(null);
+    }
+
+    controller.stop();
+    controller.destroy();
+
+    const { [tabId]: _removed, ...rest } = tabAutoRefreshMap;
+    tabAutoRefreshMap = rest;
+    const { [tabId]: _removedCleanup, ...remainingCleanup } =
+      tabAutoRefreshCleanupMap;
+    tabAutoRefreshCleanupMap = remainingCleanup;
+    const { [tabId]: _removedState, ...remainingState } = tabAutoRefreshStateMap;
+    tabAutoRefreshStateMap = remainingState;
+  }
+
   function captureCurrentTabState() {
     const activeTab = getActiveTab();
     if (
@@ -488,7 +615,9 @@
       return;
     }
 
-    tabStateMap[activeTab.id] = {
+    tabStateMap = {
+      ...tabStateMap,
+      [activeTab.id]: {
       keys: [...keys],
       selectedKey,
       keySearchInput,
@@ -500,6 +629,9 @@
       originalValueRaw,
       editorValueRaw,
       isValueEditing,
+      autoRefreshIntervalMs:
+        getTabAutoRefreshController(activeTab.id)?.getState().intervalMs ?? 0,
+      },
     };
   }
 
@@ -524,7 +656,6 @@
 
   function resetEditorViewState() {
     valueRequestId += 1;
-    autoRefresh.pause();
     pendingCreatePath = null;
     dbPath = "";
     dbForcedReadOnly = false;
@@ -627,9 +758,13 @@
     activeTabId = tabId;
 
     if (nextTab.type === "dashboard") {
+      subscribeToActiveAutoRefresh(null);
       resetEditorViewState();
       return;
     }
+
+    const autoRefreshController = getTabAutoRefreshController(tabId);
+    subscribeToActiveAutoRefresh(tabId);
 
     dbPath = nextTab.path;
     const forcedState = getForcedReadOnlyState(dbPath);
@@ -638,15 +773,18 @@
     dbReadOnlyReason = forcedState?.readOnlyReason ?? "";
     dbLockedByApp = forcedState?.lockedByApp ?? "";
 
-    if (autoRefreshState.intervalMs > 0) {
-      autoRefresh.schedule(dbPath);
-    }
-
     const saved = tabStateMap[tabId];
     if (saved) {
       const savedScrollTop = restoreTabState(saved);
       await tick();
       queueKeyListScrollRestore(savedScrollTop);
+      if (
+        autoRefreshController &&
+        autoRefreshController.getState().intervalMs > 0 &&
+        !autoRefreshController.getState().nextRefreshAt
+      ) {
+        autoRefreshController.schedule(dbPath);
+      }
       return;
     }
 
@@ -704,6 +842,7 @@
     const closingActiveTab = tabId === activeTabId;
 
     if (tab.type === "database") {
+      destroyTabAutoRefreshController(tabId);
       try {
         await LevelDBService.CloseDatabase(tab.path);
       } catch {
@@ -964,16 +1103,19 @@
   }
 
   async function refreshDatabase(source: "manual" | "auto") {
+    const autoRefreshController =
+      source === "auto" ? getActiveAutoRefreshController() : null;
+
     if (!dbPath || isRefreshing || isLoadingKeys) {
       if (source === "auto" && dbPath && autoRefreshIntervalMs > 0) {
-        autoRefresh.schedule(dbPath);
+        autoRefreshController?.schedule(dbPath);
       }
       return;
     }
 
     if (isDirty && !(await confirmDiscardUnsavedChanges())) {
       if (source === "auto" && autoRefreshIntervalMs > 0) {
-        autoRefresh.schedule(dbPath);
+        autoRefreshController?.schedule(dbPath);
       }
       return;
     }
@@ -1009,14 +1151,126 @@
       await waitForMinimumRefreshFeedback(refreshStartedAtMs);
       isRefreshing = false;
       if (autoRefreshIntervalMs > 0) {
-        autoRefresh.schedule(dbPath);
+        autoRefreshController?.schedule(dbPath);
       }
     }
   }
 
-  async function runAutoRefreshTick() {
-    if (!dbPath || autoRefreshIntervalMs <= 0) return;
-    await refreshDatabase("auto");
+  function createEmptyTabViewState(autoRefreshIntervalMs: number): TabViewState {
+    return {
+      keys: [],
+      selectedKey: null,
+      keySearchInput: "",
+      debouncedKeySearch: "",
+      keyListScrollTop: null,
+      originalValueRaw: "",
+      editorValueRaw: "",
+      isValueEditing: false,
+      autoRefreshIntervalMs,
+    };
+  }
+
+  async function refreshBackgroundTab(tabId: string) {
+    const tab = getDatabaseTabById(tabId);
+    const autoRefreshController = tabAutoRefreshMap[tabId];
+    if (!tab || !autoRefreshController) return;
+
+    const intervalMs = autoRefreshController.getState().intervalMs;
+    if (intervalMs <= 0) return;
+
+    const currentState =
+      tabStateMap[tabId] ?? createEmptyTabViewState(intervalMs);
+
+    try {
+      const refreshResult: OpenDatabaseResult =
+        await LevelDBService.RefreshDatabase(tab.path);
+      const canonicalPath = refreshResult.canonicalPath || tab.path;
+      setForcedReadOnlyState(
+        canonicalPath,
+        Boolean(refreshResult.forcedReadOnly),
+        refreshResult.readOnlyReason || "",
+        refreshResult.lockedByApp || "",
+        Boolean(refreshResult.intentionalReadOnly)
+      );
+
+      if (!getDatabaseTabById(tabId) || tabId === activeTabId) {
+        return;
+      }
+
+      const nextKeys = (await LevelDBService.GetKeys(tab.path)) ?? [];
+      const nextSelectedKey =
+        currentState.selectedKey && nextKeys.includes(currentState.selectedKey)
+          ? currentState.selectedKey
+          : null;
+
+      let nextOriginalValueRaw = currentState.originalValueRaw;
+      let nextEditorValueRaw = currentState.editorValueRaw;
+      let nextIsValueEditing =
+        currentState.isValueEditing && nextSelectedKey !== null;
+
+      if (!nextSelectedKey) {
+        nextOriginalValueRaw = "";
+        nextEditorValueRaw = "";
+        nextIsValueEditing = false;
+      } else if (!currentState.isValueEditing) {
+        try {
+          const nextValue = await LevelDBService.GetValue(
+            tab.path,
+            nextSelectedKey
+          );
+          nextOriginalValueRaw = nextValue ?? "";
+          nextEditorValueRaw = nextOriginalValueRaw;
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : String(err);
+          nextOriginalValueRaw = `Error: ${message}`;
+          nextEditorValueRaw = nextOriginalValueRaw;
+        }
+      }
+
+      if (!getDatabaseTabById(tabId) || tabId === activeTabId) {
+        return;
+      }
+
+      tabStateMap = {
+        ...tabStateMap,
+        [tabId]: {
+          ...currentState,
+          keys: nextKeys,
+          selectedKey: nextSelectedKey,
+          originalValueRaw: nextOriginalValueRaw,
+          editorValueRaw: nextEditorValueRaw,
+          isValueEditing: nextIsValueEditing,
+          autoRefreshIntervalMs: intervalMs,
+        },
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await Dialogs.Error({
+        Title: "Auto-refresh failed",
+        Message: `Could not refresh the background database tab. ${message}`.trim(),
+      });
+    } finally {
+      const nextTab = getDatabaseTabById(tabId);
+      const nextController = tabAutoRefreshMap[tabId];
+      if (
+        nextTab &&
+        nextController &&
+        nextController.getState().intervalMs > 0
+      ) {
+        nextController.schedule(nextTab.path);
+      }
+    }
+  }
+
+  async function runAutoRefreshTick(tabId: string) {
+    if (tabId === activeTabId) {
+      if (!dbPath || autoRefreshIntervalMs <= 0) return;
+      await refreshDatabase("auto");
+      return;
+    }
+
+    await refreshBackgroundTab(tabId);
   }
 
   function triggerManualRefresh() {
@@ -1454,9 +1708,15 @@
 
   onDestroy(() => {
     stopPaneResize();
-    autoRefresh.stop();
-    autoRefresh.destroy();
-    unsubscribeAutoRefresh();
+    subscribeToActiveAutoRefresh(null);
+    Object.values(tabAutoRefreshCleanupMap).forEach((cleanup) => cleanup());
+    Object.values(tabAutoRefreshMap).forEach((controller) => {
+      controller.stop();
+      controller.destroy();
+    });
+    tabAutoRefreshMap = {};
+    tabAutoRefreshCleanupMap = {};
+    tabAutoRefreshStateMap = {};
 
     if (keySearchDebounceTimeout) {
       clearTimeout(keySearchDebounceTimeout);
@@ -1479,6 +1739,7 @@
       {activeTabId}
       {canCloseTab}
       {dirtyTabIds}
+      {autoRefreshProgressByTab}
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}
@@ -1641,6 +1902,7 @@
       {activeTabId}
       {canCloseTab}
       {dirtyTabIds}
+      {autoRefreshProgressByTab}
       onTabChange={handleTabValueChange}
       onCloseTab={(tabId) => requestCloseTab(tabId)}
       onAddDashboardTab={addDashboardTab}

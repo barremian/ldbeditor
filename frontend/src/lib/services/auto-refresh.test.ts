@@ -56,4 +56,26 @@ describe("auto-refresh controller", () => {
     unsubscribe();
     controller.destroy();
   });
+
+  it("keeps multiple controllers independent", () => {
+    const firstOnTick = vi.fn();
+    const secondOnTick = vi.fn();
+    const firstController = createAutoRefreshController({ onTick: firstOnTick });
+    const secondController = createAutoRefreshController({
+      onTick: secondOnTick,
+    });
+
+    firstController.setIntervalMs(5000, "/tmp/first-db");
+    secondController.setIntervalMs(10000, "/tmp/second-db");
+
+    vi.advanceTimersByTime(5000);
+    expect(firstOnTick).toHaveBeenCalledTimes(1);
+    expect(secondOnTick).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(5000);
+    expect(secondOnTick).toHaveBeenCalledTimes(1);
+
+    firstController.destroy();
+    secondController.destroy();
+  });
 });

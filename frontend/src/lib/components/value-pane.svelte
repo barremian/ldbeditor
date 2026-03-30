@@ -103,6 +103,7 @@
         <Button
           variant="outline"
           size="icon"
+          class="h-8 w-8"
           disabled={!selectedKey || valueLoading || isSaving}
           on:click={() => dispatch("copy")}
           title={hasCopiedValue ? "Copied" : "Copy value"}

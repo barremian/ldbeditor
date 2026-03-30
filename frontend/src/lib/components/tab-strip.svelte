@@ -4,10 +4,7 @@
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Tabs, TabsList, TabsTrigger } from "$lib/components/ui/tabs";
-
-  type WorkspaceTab =
-    | { id: string; type: "dashboard"; title: string }
-    | { id: string; type: "database"; title: string; path: string };
+  import type { WorkspaceTab } from "$lib/types/workspace";
 
   export let tabs: WorkspaceTab[] = [];
   export let activeTabId = "";

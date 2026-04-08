@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount } from "svelte";
+  import { createEventDispatcher } from "svelte";
   import { ChevronDown, HandHeart, Palette, Settings2 } from "lucide-svelte";
   import {
     themePreference,
@@ -7,7 +7,6 @@
     confirmCloseLastTabPreference,
     editorFontSizePreference,
     EDITOR_FONT_SIZE_OPTIONS,
-    type EditorFontSizeValue,
   } from "$lib/preferences";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -50,44 +49,21 @@
     { value: "dark", label: "Dark" },
   ];
 
-  let preferredTheme: ThemePreference = "system";
+  $: preferredTheme = $themePreference;
   $: themeLabel =
     themeOptions.find((option) => option.value === preferredTheme)?.label ??
     "System";
-  let unsubscribeThemePreference = () => {};
 
-  let confirmCloseLastTab = true;
-  let unsubscribeConfirmCloseLastTab = () => {};
+  $: confirmCloseLastTab = $confirmCloseLastTabPreference;
 
-  let editorFontSize: EditorFontSizeValue = 14;
+  $: editorFontSize = $editorFontSizePreference;
   $: editorFontSizeLabel =
     EDITOR_FONT_SIZE_OPTIONS.find((option) => option.value === editorFontSize)
       ?.label ?? "14 px (Default)";
-  let unsubscribeEditorFontSize = () => {};
 
   function closeDialog() {
     dispatch("close");
   }
-
-  onMount(() => {
-    unsubscribeThemePreference = themePreference.subscribe((value) => {
-      preferredTheme = value;
-    });
-    unsubscribeConfirmCloseLastTab = confirmCloseLastTabPreference.subscribe(
-      (value) => {
-        confirmCloseLastTab = value;
-      }
-    );
-    unsubscribeEditorFontSize = editorFontSizePreference.subscribe((value) => {
-      editorFontSize = value;
-    });
-  });
-
-  onDestroy(() => {
-    unsubscribeThemePreference();
-    unsubscribeConfirmCloseLastTab();
-    unsubscribeEditorFontSize();
-  });
 </script>
 
 {#if open}

@@ -58,7 +58,7 @@
   }
 </script>
 
-<Card class="flex h-full min-h-0 min-w-0 flex-col">
+<Card class="flex h-full min-h-0 min-w-0 w-full flex-col">
   <CardHeader class="space-y-3 pb-3">
     <div class="flex items-center justify-between gap-2">
       <CardTitle class="flex items-center gap-2 text-base">

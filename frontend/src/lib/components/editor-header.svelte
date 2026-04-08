@@ -28,6 +28,7 @@
   }>();
 
   $: autoRefreshLabel = getAutoRefreshLabel(autoRefreshIntervalMs);
+  $: dbPathLabel = dbPath.split(/[/\\]/).pop() || dbPath;
 </script>
 
 <header
@@ -36,15 +37,15 @@
   <div
     class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
   >
-    <div class="flex min-w-0 items-center justify-between gap-2 md:flex-1">
-      <div class="flex min-w-0 items-center gap-2">
+    <div class="flex min-w-0 flex-1 items-center gap-2">
+      <div class="flex min-w-0 flex-1 items-center gap-2">
         <Badge
           variant="secondary"
-          class="max-w-[70vw] truncate md:max-w-[40vw]"
+          class="min-w-0 max-w-full shrink"
           title={dbPath}
         >
-          <Database class="mr-1.5 h-3.5 w-3.5" />
-          {dbPath.split(/[/\\]/).pop() || dbPath}
+          <Database class="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          <span class="min-w-0 truncate">{dbPathLabel}</span>
         </Badge>
         {#if autoRefreshIntervalMs > 0}
           <Badge variant="outline">Auto {autoRefreshLabel}</Badge>

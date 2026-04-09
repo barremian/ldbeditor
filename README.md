@@ -1,6 +1,6 @@
-# ldbeditor
+# LevelDB Editor
 
-A cross-platform LevelDB editor. Built with Wails v3 and SvelteKit.
+A cross-platform LevelDB viewer and editor. Built with Wails v3 and SvelteKit.
 
 ## Run
 

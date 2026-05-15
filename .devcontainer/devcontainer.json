@@ -1,0 +1,44 @@
+{
+  "name": "LevelDB Editor",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.25"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "vscode",
+      "webPort": "6080",
+      "vncPort": "5901"
+    }
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "WAILS_VITE_PORT": "9245"
+  },
+  "forwardPorts": [9245, 6080],
+  "portsAttributes": {
+    "9245": {
+      "label": "Wails/Vite dev server"
+    },
+    "6080": {
+      "label": "Desktop preview"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "svelte.svelte-vscode",
+        "task.vscode-task",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
